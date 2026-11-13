@@ -1,0 +1,31 @@
+.build/
+.DS_Store
+DerivedData/
+*.xcuserstate
+xcuserdata/
+.superpowers/
+
+__pycache__/
+*.pyc
+
+# Local credentials, signing assets, and application exports
+.env
+.env.*
+!.env.example
+Config/Signing.local.xcconfig
+*.p12
+*.pfx
+*.pem
+*.key
+*.cer
+*.cert
+*.mobileprovision
+*.provisionprofile
+*.ipa
+*.xcarchive/
+*.xcresult/
+*.log
+
+# Local implementation notes
+docs/progress.md
+docs/superpowers/

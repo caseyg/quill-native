@@ -1,0 +1,172 @@
+import Foundation
+
+public enum JSONValue: Codable, Equatable, Sendable {
+    case string(String), number(Double), bool(Bool), array([JSONValue]), object([String: JSONValue]), null
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.singleValueContainer()
+        if c.decodeNil() { self = .null }
+        else if let v = try? c.decode(Bool.self) { self = .bool(v) }
+        else if let v = try? c.decode(Double.self) { self = .number(v) }
+        else if let v = try? c.decode(String.self) { self = .string(v) }
+        else if let v = try? c.decode([JSONValue].self) { self = .array(v) }
+        else { self = .object(try c.decode([String: JSONValue].self)) }
+    }
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.singleValueContainer()
+        switch self {
+        case .string(let v): try c.encode(v)
+        case .number(let v): try c.encode(v)
+        case .bool(let v): try c.encode(v)
+        case .array(let v): try c.encode(v)
+        case .object(let v): try c.encode(v)
+        case .null: try c.encodeNil()
+        }
+    }
+    public var object: [String: JSONValue]? { if case .object(let v) = self { return v }; return nil }
+    public var array: [JSONValue]? { if case .array(let v) = self { return v }; return nil }
+    public var string: String? { if case .string(let v) = self { return v }; return nil }
+    public func encoded() throws -> Data { try JSONEncoder().encode(self) }
+}
+
+public enum PostKind: String, Codable, CaseIterable, Identifiable, Sendable {
+    case note, photo, reply, article, bookmark, like, repost, event, review, itinerary, code, weight, exercise
+    public var id: String { rawValue }
+    public var title: String { switch self {
+        case .like: return "Like"
+        default: return rawValue.capitalized
+    } }
+    public var symbol: String { switch self {
+        case .note: return "square.and.pencil"
+        case .photo: return "photo"
+        case .reply: return "arrowshape.turn.up.left"
+        case .article: return "doc.richtext"
+        case .bookmark: return "bookmark"
+        case .like: return "heart"
+        case .repost: return "arrow.2.squarepath"
+        case .event: return "calendar"
+        case .review: return "star"
+        case .itinerary: return "airplane"
+        case .code: return "chevron.left.forwardslash.chevron.right"
+        case .weight: return "scalemass"
+        case .exercise: return "figure.run"
+    } }
+    public var subtitle: String { switch self {
+        case .note: return "A thought, in your own words"
+        case .photo: return "A moment worth keeping"
+        case .reply: return "Continue the conversation"
+        case .article: return "Room for a longer story"
+        case .bookmark: return "Save something you found"
+        case .like: return "Show your appreciation"
+        case .repost: return "Pass something along"
+        case .event: return "Bring people together"
+        case .review: return "Share your perspective"
+        case .itinerary: return "Where you’re headed"
+        case .code: return "A useful snippet"
+        case .weight: return "Record a measurement"
+        case .exercise: return "Log your movement"
+    } }
+}
+
+public struct Attachment: Codable, Identifiable, Equatable, Sendable {
+    public var id = UUID()
+    public var data: Data
+    public var filename: String
+    public var mimeType: String
+    public var alt: String
+    public var remoteURL: URL?
+    public init(data: Data, filename: String, mimeType: String, alt: String = "") {
+        self.data = data; self.filename = filename; self.mimeType = mimeType; self.alt = alt
+    }
+}
+public struct Leg: Codable, Identifiable, Equatable, Sendable {
+    public var id = UUID()
+    public var transitType = "air"
+    public var operatorName = ""
+    public var number = ""
+    public var origin: String
+    public var destination: String
+    public var departure: String
+    public var arrival: String
+    public init(origin: String = "", destination: String = "", departure: String = "", arrival: String = "") {
+        self.origin = origin; self.destination = destination; self.departure = departure; self.arrival = arrival
+    }
+}
+public struct Draft: Codable, Identifiable, Equatable, Sendable {
+    public var id = UUID()
+    public var kind: PostKind
+    public var title = ""
+    public var content = ""
+    public var isHTML = false
+    public var target = ""
+    public var tags = ""
+    public var slug = ""
+    public var visibility = ""
+    public var channel = ""
+    public var syndication: [String] = []
+    public var location = ""
+    public var published: String = ""
+    public var remoteDraft = false
+    public var fields: [String: String] = [:]
+    public var legs: [Leg] = []
+    public var attachments: [Attachment] = []
+    public var editURL: URL?
+    public var accountURL: URL?
+    public var modified = Date()
+    public init(kind: PostKind) { self.kind = kind }
+    public var displayTitle: String { !title.isEmpty ? title : (!content.isEmpty ? String(content.prefix(80)) : (!target.isEmpty ? target : "Untitled \(kind.rawValue)")) }
+}
+public struct Preferences: Codable, Equatable, Sendable {
+    public var slugField = "mp-slug"
+    public var syndicationField = "mp-syndicate-to"
+    public var htmlContent = true
+    public var weightUnit = "lb"
+    public init() {}
+}
+public struct Account: Codable, Equatable, Sendable {
+    public var me: URL
+    public var micropub: URL
+    public var tokenEndpoint: URL?
+    public var scope: String
+    public init(me: URL, micropub: URL, tokenEndpoint: URL? = nil, scope: String = "create update media") {
+        self.me = me; self.micropub = micropub; self.tokenEndpoint = tokenEndpoint; self.scope = scope
+    }
+    public func permits(_ action: String) -> Bool { scope.split(separator: " ").contains(Substring(action)) }
+}
+public struct Receipt: Codable, Identifiable, Sendable {
+    public var id = UUID()
+    public var title: String
+    public var kind: PostKind
+    public var url: URL
+    public var date = Date()
+    public var accountURL: URL?
+    public var status: String
+    public init(draft: Draft, url: URL, now: Date = Date()) {
+        title = draft.displayTitle; kind = draft.kind; self.url = url; accountURL = draft.accountURL
+        status = draft.editURL != nil ? "Updated" : (draft.remoteDraft ? "Remote draft" : ((ISO8601DateFormatter().date(from:draft.published).map { $0 > now } ?? false) ? "Scheduled request" : "Published"))
+    }
+}
+public struct QuillError: LocalizedError, Equatable {
+    public let message: String
+    public init(_ message: String) { self.message = message }
+    public var errorDescription: String? { message }
+}
+public enum WebURL {
+    public static func parse(_ value: String) throws -> URL {
+        guard let url = URL(string: value.trimmingCharacters(in: .whitespacesAndNewlines)), ["https", "http"].contains(url.scheme?.lowercased() ?? ""), url.host != nil, url.user == nil, url.password == nil else { throw QuillError("Enter a valid http or https URL.") }
+        return url
+    }
+    public static func site(_ value: String) throws -> URL {
+        let input = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        let url = try parse(input.contains("://") ? input : "https://" + input)
+        var c = URLComponents(url:url,resolvingAgainstBaseURL:false)!
+        if c.path.isEmpty { c.path = "/" }
+        return c.url!
+    }
+}
+
+public extension Draft {
+    mutating func setPublicationDateEnabled(_ enabled: Bool, now: Date = Date()) {
+        if !enabled { published = "" }
+        else if published.isEmpty { published = ISO8601DateFormatter().string(from:now) }
+    }
+}

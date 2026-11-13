@@ -1,0 +1,8 @@
+Quill Native
+
+Inspired by Quill, Copyright 2013–2016 Aaron Parecki and contributors.
+Original project: https://github.com/aaronpk/Quill
+Original project license: Apache License, Version 2.0.
+
+The native SwiftUI interface and Swift implementation are new. Micropub property conventions and feature inventory were researched from the original project at commit 3cabff0c599439864fe82f6d923c11c7a69aa58b.
+The original Quill icon is not included.
