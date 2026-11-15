@@ -97,18 +97,81 @@ final class AppStore {
     /// Downloads every post the site lists. Failures leave the posts already on device in place.
     func sync() async {
         guard let account, let client, !syncing else { return }
-        syncing = true; defer { syncing = false }
+        syncing = true; defer { syncing = false; syncProgress = nil }
+        // Dates of posts already on device let the bar show how far back the sync has reached.
+        let oldest = library.posts.compactMap(\.published).min()
+        let filling = library.posts.isEmpty
+        syncProgress = SyncProgress(count: 0, fraction: oldest == nil ? nil : 0)
         do {
-            let result = try await LibrarySync.fetch(client: client, me: account.me)
+            let result = try await LibrarySync.fetch(client: client, me: account.me) { [weak self] page in
+                await self?.received(page, oldest: oldest, filling: filling)
+            }
             guard self.account == account else { return }
             // A sync that began before a post was sent may not include it yet.
             let fetched = Set(result.posts.map(\.url))
             let sent = library.posts.filter { recentlySent.contains($0.url) && !fetched.contains($0.url) }
             recentlySent.subtract(fetched)
             library.replace(with: sent + result.posts, source: result.source)
-            try libraryStore?.save(library)
+            saveLibrary()
         } catch {
             if library.posts.isEmpty { self.error = error.localizedDescription }
+        }
+    }
+
+    struct SyncProgress: Equatable {
+        var count: Int
+        /// How far back in time the sync has reached, when there are earlier posts to compare with.
+        var fraction: Double?
+    }
+    var syncProgress: SyncProgress?
+
+    /// Shows each page as it arrives. A first sync lists posts right away instead of after the last page.
+    private func received(_ page: [Post], oldest: Date?, filling: Bool) {
+        guard var progress = syncProgress else { return }
+        progress.count += page.count
+        if let oldest, let reached = page.compactMap(\.published).min() {
+            let span = Date().timeIntervalSince(oldest)
+            if span > 0 { progress.fraction = max(progress.fraction ?? 0, min(1, Date().timeIntervalSince(reached) / span)) }
+        }
+        syncProgress = progress
+        if filling {
+            let known = Set(library.posts.map(\.id))
+            library.posts += page.filter { !known.contains($0.id) }
+        }
+    }
+
+    /// Encodes and writes the library away from the main thread.
+    private func saveLibrary() {
+        guard let store = libraryStore else { return }
+        let snapshot = library
+        Task.detached(priority: .utility) { try? store.save(snapshot) }
+    }
+
+    @ObservationIgnored private var describing: Set<Post.ID> = []
+    @ObservationIgnored private var pendingSave: Task<Void, Never>?
+
+    /// Reads the author and text of the page a like, repost, reply or bookmark points to, once.
+    func describe(_ post: Post) async {
+        guard post.needsCite, let url = try? WebURL.parse(post.target), describing.insert(post.id).inserted else { return }
+        defer { describing.remove(post.id) }
+        var request = URLRequest(url: url); request.timeoutInterval = 15
+        let summary: (author: String, text: String)
+        if let (data, response) = try? await Network.send(request), (200..<300).contains(response.statusCode) {
+            summary = PageSummary.parse(html: String(decoding: data.prefix(2_000_000), as: UTF8.self))
+        } else if Task.isCancelled {
+            return // Scrolled away; try again when the row returns.
+        } else {
+            summary = ("", "")
+        }
+        guard let index = library.posts.firstIndex(where: { $0.id == post.id }) else { return }
+        library.posts[index].citeAuthor = summary.author
+        library.posts[index].citeText = summary.text
+        // Rows fill in quickly while scrolling, so write to disk once they settle.
+        pendingSave?.cancel()
+        pendingSave = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(2))
+            guard !Task.isCancelled, let self else { return }
+            self.saveLibrary()
         }
     }
 
@@ -129,7 +192,7 @@ final class AppStore {
             try await client.delete(post.url)
             library.posts.removeAll { $0.id == post.id }
             forget(url: post.url)
-            try? libraryStore?.save(library)
+            saveLibrary()
         } catch { self.error = error.localizedDescription }
     }
 
@@ -217,7 +280,7 @@ final class AppStore {
         }
         library.upsert(post)
         recentlySent.insert(post.url)
-        try? libraryStore?.save(library)
+        saveLibrary()
     }
 
     private func forget(url: URL) {

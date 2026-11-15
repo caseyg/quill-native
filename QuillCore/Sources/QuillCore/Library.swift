@@ -13,13 +13,20 @@ public struct Post: Codable, Identifiable, Equatable, Sendable {
     public var photoAlt = ""
     public var published: Date?
     public var isDraft = false
+    /// Who wrote the post this one responds to, such as "Erin Kissane (@kissane.bsky.social)".
+    public var citeAuthor: String?
+    /// The text of the post this one responds to.
+    public var citeText: String?
     public var id: String { url.absoluteString }
+
+    /// True until the responded-to page has been read. A page with nothing to show leaves empty strings.
+    public var needsCite: Bool { !target.isEmpty && citeAuthor == nil && citeText == nil }
 
     public init(url: URL, kind: PostKind) { self.url = url; self.kind = kind }
 
     /// The name, else the body, else the photo description, else the link it responds to.
     public var displayTitle: String {
-        for value in [name, text, photoAlt, target] {
+        for value in [name, text, photoAlt, citeText ?? "", citeAuthor ?? "", target] {
             let line = value.trimmingCharacters(in: .whitespacesAndNewlines)
             if !line.isEmpty { return String(line.prefix(200)) }
         }
@@ -29,7 +36,7 @@ public struct Post: Codable, Identifiable, Equatable, Sendable {
     public func matches(_ query: String) -> Bool {
         let terms = query.split(whereSeparator: \.isWhitespace)
         guard !terms.isEmpty else { return true }
-        let haystack = ([name, text, photoAlt, target, url.absoluteString] + categories).joined(separator: "\n")
+        let haystack = ([name, text, photoAlt, target, citeAuthor ?? "", citeText ?? "", url.absoluteString] + categories).joined(separator: "\n")
         return terms.allSatisfy { haystack.range(of: $0, options: [.caseInsensitive, .diacriticInsensitive]) != nil }
     }
 }
@@ -46,6 +53,12 @@ public extension Post {
         text = MF2.text(p["p3k-content-type"]) == "text/markdown" ? Markdown.text(content.text) : content.text
         if name.trimmingCharacters(in: .whitespacesAndNewlines) == text.prefix(name.count).trimmingCharacters(in: .whitespacesAndNewlines) && kind != .article { name = "" }
         target = ["in-reply-to", "bookmark-of", "like-of", "repost-of"].lazy.compactMap { MF2.url(p[$0]) }.first ?? ""
+        // Servers may describe the target as an h-cite with its author and text.
+        if let cite = ["in-reply-to", "bookmark-of", "like-of", "repost-of"].lazy.compactMap({ p[$0]?.array?.first?.object?["properties"]?.object }).first {
+            let author = MF2.text(cite["author"]), quoted = MF2.content(cite["content"]).text, title = MF2.text(cite["name"])
+            if !author.isEmpty { citeAuthor = author }
+            if !quoted.isEmpty || !title.isEmpty { citeText = quoted.isEmpty ? title : quoted }
+        }
         categories = (p["category"]?.array ?? []).compactMap { $0.string }
         if let photo = p["photo"]?.array?.first {
             let raw = photo.string ?? photo.object?["value"]?.string ?? photo.object?["url"]?.string
@@ -269,6 +282,42 @@ private final class XMLFeedReader: NSObject, XMLParserDelegate {
     }
 }
 
+// MARK: Responded-to pages
+
+public enum PageSummary {
+    /// The author and text a page shares in its Open Graph tags, as Bluesky and Mastodon posts do.
+    public static func parse(html: String) -> (author: String, text: String) {
+        func meta(_ name: String) -> String? {
+            guard let regex = try? NSRegularExpression(pattern: #"<meta\b[^>]*>"#, options: .caseInsensitive) else { return nil }
+            let ns = html as NSString
+            for match in regex.matches(in: html, range: NSRange(location: 0, length: ns.length)) {
+                let tag = ns.substring(with: match.range)
+                func attribute(_ key: String) -> String? {
+                    guard let r = tag.range(of: #"\b"# + key + #"\s*=\s*("[^"]*"|'[^']*')"#, options: [.regularExpression, .caseInsensitive]) else { return nil }
+                    return String(tag[r].split(separator: "=", maxSplits: 1)[1].trimmingCharacters(in: .whitespaces).dropFirst().dropLast())
+                }
+                if [attribute("property"), attribute("name")].contains(where: { $0?.lowercased() == name }), let content = attribute("content") {
+                    return HTML.text(content)
+                }
+            }
+            return nil
+        }
+        var title = meta("og:title") ?? ""
+        if title.isEmpty, let r = html.range(of: #"<title[^>]*>[^<]*"#, options: [.regularExpression, .caseInsensitive]) {
+            title = HTML.text(String(html[r]).replacingOccurrences(of: #"<title[^>]*>"#, with: "", options: [.regularExpression, .caseInsensitive]))
+        }
+        return (title, meta("og:description") ?? meta("description") ?? "")
+    }
+}
+
+public extension Post {
+    /// The author's display name, without the handle Bluesky and Mastodon add in parentheses.
+    var citeName: String? {
+        guard let author = citeAuthor?.trimmingCharacters(in: .whitespaces), !author.isEmpty else { return nil }
+        return author.replacingOccurrences(of: #"\s*\(@[^)]*\)$"#, with: "", options: .regularExpression)
+    }
+}
+
 // MARK: Sync and storage
 
 public struct Library: Codable, Equatable, Sendable {
@@ -280,7 +329,12 @@ public struct Library: Codable, Equatable, Sendable {
     /// Newest first. Posts without a date keep the server's order at the end.
     public mutating func replace(with posts: [Post], source: LibrarySource, now: Date = Date()) {
         var seen = Set<String>()
-        var merged = posts.filter { seen.insert($0.id).inserted }
+        let known = Dictionary(self.posts.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        var merged = posts.filter { seen.insert($0.id).inserted }.map { post in
+            // Keep what was read from the responded-to page, which the server doesn't send.
+            guard post.needsCite, let old = known[post.id], old.target == post.target else { return post }
+            var post = post; post.citeAuthor = old.citeAuthor; post.citeText = old.citeText; return post
+        }
         // A feed shows only recent posts, so keep older ones already on device.
         if source == .feed { merged += self.posts.filter { seen.insert($0.id).inserted } }
         self.posts = merged.enumerated().sorted { a, b in
@@ -320,15 +374,17 @@ public enum LibrarySync {
     public typealias Fetch = (URLRequest) async throws -> (Data, HTTPURLResponse)
 
     /// Every post from Micropub when the server lists them, otherwise recent posts from the site's feed.
-    public static func fetch(client: MicropubClient, me: URL, maxPages: Int = 200, fetch: @escaping Fetch = Network.send, progress: @escaping @Sendable (Int) -> Void = { _ in }) async throws -> (posts: [Post], source: LibrarySource) {
+    /// `progress` receives each page as it arrives, so a list can fill in while the rest downloads.
+    public static func fetch(client: MicropubClient, me: URL, maxPages: Int = 200, fetch: @escaping Fetch = Network.send, progress: @escaping @Sendable ([Post]) async -> Void = { _ in }) async throws -> (posts: [Post], source: LibrarySource) {
         if var page = try await client.posts() {
             var posts = page.posts
+            await progress(page.posts)
             var cursors = Set<String>()
             for _ in 1..<maxPages {
                 guard let after = page.after, cursors.insert(after).inserted, !page.posts.isEmpty else { break }
-                progress(posts.count)
                 guard let next = try await client.posts(after: after) else { break }
                 page = next; posts += next.posts
+                await progress(next.posts)
             }
             return (posts, .micropub)
         }
@@ -343,7 +399,7 @@ public enum LibrarySync {
             let (data, response) = try await fetch(URLRequest(url: url)); try Network.check(response)
             let page = Feed.parse(data)
             posts += page.posts; next = page.next
-            progress(posts.count)
+            await progress(page.posts)
         }
         return (posts, .feed)
     }

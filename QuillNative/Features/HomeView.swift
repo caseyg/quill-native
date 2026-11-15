@@ -40,8 +40,9 @@ struct HomeView: View {
                 Section("Posts") {
                     ForEach(posts) { post in
                         Button { open(post) } label: {
-                            PostRow(symbol: post.kind.symbol, title: post.displayTitle, date: post.published, status: post.isDraft ? "Draft" : nil, photo: post.photo.map(Thumbnail.remote), loading: store.opening == post.id)
+                            PostRow(symbol: post.kind.symbol, title: post.displayTitle, date: post.published, status: post.isDraft ? "Draft" : post.citeName.flatMap { $0 == post.displayTitle || post.displayTitle.hasPrefix($0) ? nil : $0 }, photo: post.photo.map(Thumbnail.remote), loading: store.opening == post.id)
                         }
+                        .task(id: post.id) { await store.describe(post) }
                         .zoomSource(post.id, in: zoom)
                         .swipeActions {
                             Button { deleting = post } label: { Label("Delete", systemImage: "trash") }.tint(.red)
@@ -68,12 +69,16 @@ struct HomeView: View {
         .animation(.snappy, value: store.library.posts.map(\.id))
         .overlay {
             if store.drafts.isEmpty && store.library.posts.isEmpty {
-                if store.syncing { ProgressView() }
+                if store.syncing { ProgressView() } // Until the first page arrives.
                 else { ContentUnavailableView("No Posts", systemImage: "square.and.pencil") }
             } else if drafts.isEmpty && posts.isEmpty {
                 ContentUnavailableView.search(text: search)
             }
         }
+        .safeAreaInset(edge: .top, spacing: 0) {
+            if let progress = store.syncProgress, progress.count > 0 { SyncBar(progress: progress).transition(.opacity) }
+        }
+        .animation(.snappy, value: store.syncProgress == nil)
         .navigationTitle(store.account?.me.host ?? "Posts")
         .searchable(text: $search)
         .refreshable { store.reloadDrafts(); await store.refresh() }
@@ -131,6 +136,35 @@ struct HomeView: View {
             store.compose(store.preferences.visibleKinds.first ?? .note)
         }
         .accessibilityIdentifier("compose")
+    }
+}
+
+/// A slim bar while posts download, so the list stays usable.
+private struct SyncBar: View {
+    let progress: AppStore.SyncProgress
+
+    var body: some View {
+        HStack(spacing: 10) {
+            if let fraction = progress.fraction {
+                ProgressView(value: fraction).animation(.snappy, value: fraction)
+                count
+            } else {
+                // A first sync can't know how many posts there are, only how many have arrived.
+                ProgressView().controlSize(.mini)
+                count
+                Spacer(minLength: 0)
+            }
+        }
+        .font(.footnote)
+        .foregroundStyle(.secondary)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 6)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Syncing \(progress.count) posts")
+    }
+
+    private var count: some View {
+        Text("\(progress.count) Posts").monospacedDigit().contentTransition(.numericText())
     }
 }
 

@@ -137,3 +137,42 @@ final class MarkdownTests: XCTestCase {
         XCTAssertEqual(Markdown.text("Happy bday to [@shannon](https://bsky.app/x) **today**"), "Happy bday to @shannon today")
     }
 }
+
+final class CiteTests: XCTestCase {
+    func testOpenGraphGivesAuthorAndText() {
+        let html = #"<head><title>@vruba.bsky.social on Bluesky</title><meta property="og:title" content="Charlie Loyd (@vruba.bsky.social)"><meta property="og:description" content="(We&#39;ve got to solve this &amp; that)"></head>"#
+        let summary = PageSummary.parse(html: html)
+        XCTAssertEqual(summary.author, "Charlie Loyd (@vruba.bsky.social)")
+        XCTAssertEqual(summary.text, "(We've got to solve this & that)")
+        var post = Post(url: URL(string: "https://example.com/like")!, kind: .like)
+        post.target = "https://bsky.app/profile/x/post/1"
+        XCTAssertTrue(post.needsCite)
+        post.citeAuthor = summary.author; post.citeText = summary.text
+        XCTAssertEqual(post.displayTitle, "(We've got to solve this & that)")
+        XCTAssertEqual(post.citeName, "Charlie Loyd")
+        XCTAssertTrue(post.matches("solve loyd"))
+    }
+    func testHCiteTargetsNeedNoFetch() {
+        let item = JSONValue.object(["type": .array([.string("h-entry")]), "properties": .object([
+            "url": .array([.string("https://example.com/l")]),
+            "like-of": .array([.object(["type": .array([.string("h-cite")]), "properties": .object([
+                "url": .array([.string("https://social.example/@a/1")]),
+                "author": .array([.string("Ada")]),
+                "content": .array([.string("Hello world")]),
+            ])])]),
+        ])])
+        let post = Post(mf2: item)!
+        XCTAssertEqual(post.kind, .like)
+        XCTAssertEqual(post.target, "https://social.example/@a/1")
+        XCTAssertFalse(post.needsCite)
+        XCTAssertEqual(post.displayTitle, "Hello world")
+    }
+    func testSyncKeepsFetchedCites() {
+        var library = Library()
+        var post = Post(url: URL(string: "https://example.com/l")!, kind: .like); post.target = "https://b.example/1"
+        library.replace(with: [post], source: .micropub)
+        library.posts[0].citeAuthor = "Ada"; library.posts[0].citeText = "Hi"
+        library.replace(with: [post], source: .micropub)
+        XCTAssertEqual(library.posts[0].citeText, "Hi")
+    }
+}
