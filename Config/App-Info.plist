@@ -7,14 +7,14 @@
 <key>CFBundleName</key><string>$(PRODUCT_NAME)</string>
 <key>CFBundlePackageType</key><string>APPL</string>
 <key>CFBundleShortVersionString</key><string>1.0</string><key>CFBundleVersion</key><string>1</string>
-<key>QuillIndieAuthClientID</key><string>https://caseyagollan.com/clients/quill-native/</string>
+<key>QuillIndieAuthClientID</key><string>$(QUILL_CLIENT_ID)</string>
 <key>LSRequiresIPhoneOS</key><true/>
 <key>UIApplicationSceneManifest</key><dict><key>UIApplicationSupportsMultipleScenes</key><false/></dict>
 <key>UILaunchScreen</key><dict/>
 <key>UISupportedInterfaceOrientations</key><array><string>UIInterfaceOrientationPortrait</string><string>UIInterfaceOrientationLandscapeLeft</string><string>UIInterfaceOrientationLandscapeRight</string></array>
 <key>UISupportedInterfaceOrientations~ipad</key><array><string>UIInterfaceOrientationPortrait</string><string>UIInterfaceOrientationPortraitUpsideDown</string><string>UIInterfaceOrientationLandscapeLeft</string><string>UIInterfaceOrientationLandscapeRight</string></array>
 <key>CFBundleURLTypes</key><array><dict><key>CFBundleURLName</key><string>com.quillnative.app</string><key>CFBundleURLSchemes</key><array><string>quill-native</string></array></dict></array>
-<key>NSLocationWhenInUseUsageDescription</key><string>Add your current location to a post when you choose.</string>
-<key>NSCameraUsageDescription</key><string>Take a photo to include in your post.</string>
+<key>NSLocationWhenInUseUsageDescription</key><string>Adds your location to a post.</string>
+<key>NSCameraUsageDescription</key><string>Takes a photo for a post.</string>
 <key>NSAppTransportSecurity</key><dict><key>NSAllowsLocalNetworking</key><true/></dict>
 </dict></plist>

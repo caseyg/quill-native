@@ -11,7 +11,6 @@ final class AuthService: NSObject, ASWebAuthenticationPresentationContextProvidi
     }
     func login(site: String, clientID: String) async throws -> (Account, String) {
         let client = try WebURL.parse(clientID)
-        guard client.scheme == "https" else { throw QuillError("The IndieAuth client ID must be a full HTTPS URL.") }
         let connection = try await SignInDiscovery.discover(site:site)
         let me = connection.me
         let auth = connection.authorizationEndpoint
@@ -27,7 +26,7 @@ final class AuthService: NSObject, ASWebAuthenticationPresentationContextProvidi
         c.queryItems = (c.queryItems ?? []) + ["me":me.absoluteString,"client_id":client.absoluteString,"redirect_uri":redirect,"state":state,"response_type":"code","scope":requestedScopes,"code_challenge":challenge,"code_challenge_method":"S256"].map { URLQueryItem(name:$0.key,value:$0.value) }
         let callback: URL = try await withCheckedThrowingContinuation { continuation in
             let session = ASWebAuthenticationSession(url:c.url!,callbackURLScheme:"quill-native") { url,error in
-                if let error { continuation.resume(throwing:error) } else if let url { continuation.resume(returning:url) } else { continuation.resume(throwing:QuillError("Sign-in was cancelled.")) }
+                if let url { continuation.resume(returning:url) } else if let error, (error as? ASWebAuthenticationSessionError)?.code != .canceledLogin { continuation.resume(throwing:error) } else { continuation.resume(throwing:CancellationError()) }
             }
             session.presentationContextProvider = self
             self.session = session
@@ -42,8 +41,14 @@ final class AuthService: NSObject, ASWebAuthenticationPresentationContextProvidi
         let values: [String:String]
         if let object = try? JSONDecoder().decode(JSONValue.self,from:tokenData).object { values = object.compactMapValues(\.string) }
         else { values = Dictionary((URLComponents(string:"?" + String(decoding:tokenData,as:UTF8.self))?.queryItems ?? []).compactMap { item in item.value.map { (item.name,$0) } },uniquingKeysWith: { first,_ in first }) }
-        guard let accessToken = values["access_token"], !accessToken.isEmpty, values["token_type"]?.lowercased() == "bearer", let returnedMe = values["me"].flatMap({ try? WebURL.parse($0) }) else { throw QuillError("Your token endpoint did not return a valid bearer token and identity.") }
-        guard returnedMe == me else { throw QuillError("The returned identity does not match your site.") }
-        return (Account(me:returnedMe,micropub:micropub,tokenEndpoint:token,scope:values["scope"] ?? ""),accessToken)
+        guard let accessToken = values["access_token"], !accessToken.isEmpty, values["token_type"]?.lowercased() == "bearer", let returnedMe = values["me"].flatMap({ try? WebURL.site($0) }) else { throw QuillError("Your site didn’t return a valid token.") }
+        var endpoint = micropub
+        if returnedMe != me {
+            // IndieAuth lets a server return a more specific profile URL, provided it names the same authorization server.
+            let confirmed = try await SignInDiscovery.discover(site:returnedMe.absoluteString)
+            guard confirmed.authorizationEndpoint == auth else { throw QuillError("Your site signed in a different address.") }
+            endpoint = confirmed.micropub
+        }
+        return (Account(me:returnedMe,micropub:endpoint,tokenEndpoint:token,scope:values["scope"] ?? ""),accessToken)
     }
 }

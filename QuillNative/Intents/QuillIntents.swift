@@ -10,7 +10,7 @@ enum ComposeKind: String, AppEnum {
 struct DraftEntity: AppEntity {
     let id: String
     let title: String
-    static let typeDisplayRepresentation: TypeDisplayRepresentation = "Quill draft"
+    static let typeDisplayRepresentation: TypeDisplayRepresentation = "Draft"
     static let defaultQuery = DraftQuery()
     var displayRepresentation: DisplayRepresentation { DisplayRepresentation(title:"\(title)") }
 }
@@ -26,8 +26,8 @@ private func routeToDraft(_ draft: Draft) throws {
     NotificationCenter.default.post(name:.quillRoute,object:nil)
 }
 struct ComposeNoteIntent: AppIntent {
-    static let title: LocalizedStringResource = "Compose a note"
-    static let description = IntentDescription("Open a new note with optional text. Nothing is published until you send it.")
+    static let title: LocalizedStringResource = "New Note"
+    static let description = IntentDescription("Opens a new note.")
     static let openAppWhenRun = true
     @Parameter(title:"Text") var text: String?
     @MainActor func perform() async throws -> some IntentResult {
@@ -36,8 +36,8 @@ struct ComposeNoteIntent: AppIntent {
     }
 }
 struct BookmarkURLIntent: AppIntent {
-    static let title: LocalizedStringResource = "Bookmark a URL"
-    static let description = IntentDescription("Open a bookmark draft for a URL.")
+    static let title: LocalizedStringResource = "New Bookmark"
+    static let description = IntentDescription("Opens a new bookmark.")
     static let openAppWhenRun = true
     @Parameter(title:"URL") var url: URL
     @MainActor func perform() async throws -> some IntentResult {
@@ -47,19 +47,19 @@ struct BookmarkURLIntent: AppIntent {
     }
 }
 struct ResumeDraftIntent: AppIntent {
-    static let title: LocalizedStringResource = "Resume a draft"
+    static let title: LocalizedStringResource = "Open Draft"
     static let openAppWhenRun = true
     @Parameter(title:"Draft") var draft: DraftEntity
     @MainActor func perform() async throws -> some IntentResult {
-        guard let id = UUID(uuidString:draft.id), try SharedStorage.drafts.load().contains(where:{$0.id == id}) else { throw QuillError("This draft is no longer available.") }
+        guard let id = UUID(uuidString:draft.id), try SharedStorage.drafts.load().contains(where:{$0.id == id}) else { throw QuillError("This draft no longer exists.") }
         SharedStorage.defaults.set("quill-native://draft?id=" + id.uuidString,forKey:"pendingRoute")
         NotificationCenter.default.post(name:.quillRoute,object:nil); return .result()
     }
 }
 struct QuillShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
-        AppShortcut(intent:ComposeNoteIntent(),phrases:["Write a note in \(.applicationName)","Compose with \(.applicationName)"],shortTitle:"Write a note",systemImageName:"square.and.pencil")
-        AppShortcut(intent:BookmarkURLIntent(),phrases:["Save a bookmark in \(.applicationName)"],shortTitle:"Bookmark URL",systemImageName:"bookmark")
-        AppShortcut(intent:ResumeDraftIntent(),phrases:["Resume a draft in \(.applicationName)"],shortTitle:"Resume draft",systemImageName:"tray")
+        AppShortcut(intent:ComposeNoteIntent(),phrases:["Write a note in \(.applicationName)","Compose with \(.applicationName)"],shortTitle:"New Note",systemImageName:"square.and.pencil")
+        AppShortcut(intent:BookmarkURLIntent(),phrases:["Save a bookmark in \(.applicationName)"],shortTitle:"New Bookmark",systemImageName:"bookmark")
+        AppShortcut(intent:ResumeDraftIntent(),phrases:["Resume a draft in \(.applicationName)"],shortTitle:"Open Draft",systemImageName:"tray")
     }
 }

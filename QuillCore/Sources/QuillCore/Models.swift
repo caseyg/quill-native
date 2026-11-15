@@ -50,21 +50,6 @@ public enum PostKind: String, Codable, CaseIterable, Identifiable, Sendable {
         case .weight: return "scalemass"
         case .exercise: return "figure.run"
     } }
-    public var subtitle: String { switch self {
-        case .note: return "A thought, in your own words"
-        case .photo: return "A moment worth keeping"
-        case .reply: return "Continue the conversation"
-        case .article: return "Room for a longer story"
-        case .bookmark: return "Save something you found"
-        case .like: return "Show your appreciation"
-        case .repost: return "Pass something along"
-        case .event: return "Bring people together"
-        case .review: return "Share your perspective"
-        case .itinerary: return "Where you’re headed"
-        case .code: return "A useful snippet"
-        case .weight: return "Record a measurement"
-        case .exercise: return "Log your movement"
-    } }
 }
 
 public struct Attachment: Codable, Identifiable, Equatable, Sendable {
@@ -114,6 +99,14 @@ public struct Draft: Codable, Identifiable, Equatable, Sendable {
     public var modified = Date()
     public init(kind: PostKind) { self.kind = kind }
     public var displayTitle: String { !title.isEmpty ? title : (!content.isEmpty ? String(content.prefix(80)) : (!target.isEmpty ? target : "Untitled \(kind.rawValue)")) }
+    /// True when nothing worth keeping has been entered, so closing the composer leaves no draft behind.
+    public var isBlank: Bool {
+        func empty(_ value: String) -> Bool { value.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty }
+        let defaults: Set<String> = ["rating","start","p3k-content-type"]
+        return editURL == nil && attachments.isEmpty && [title,content,target,tags,location].allSatisfy(empty)
+            && fields.allSatisfy { defaults.contains($0.key) || empty($0.value) }
+            && legs.allSatisfy { [$0.origin,$0.destination,$0.operatorName,$0.number].allSatisfy(empty) }
+    }
 }
 public struct Preferences: Codable, Equatable, Sendable {
     public var slugField = "mp-slug"
@@ -142,7 +135,7 @@ public struct Receipt: Codable, Identifiable, Sendable {
     public var status: String
     public init(draft: Draft, url: URL, now: Date = Date()) {
         title = draft.displayTitle; kind = draft.kind; self.url = url; accountURL = draft.accountURL
-        status = draft.editURL != nil ? "Updated" : (draft.remoteDraft ? "Remote draft" : ((ISO8601DateFormatter().date(from:draft.published).map { $0 > now } ?? false) ? "Scheduled request" : "Published"))
+        status = draft.editURL != nil ? "Updated" : (draft.remoteDraft ? "Draft" : ((ISO8601DateFormatter().date(from:draft.published).map { $0 > now } ?? false) ? "Scheduled" : "Published"))
     }
 }
 public struct QuillError: LocalizedError, Equatable {
@@ -157,6 +150,7 @@ public enum WebURL {
     }
     public static func site(_ value: String) throws -> URL {
         let input = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !input.isEmpty, !input.contains(where:\.isWhitespace) else { throw QuillError("Enter a valid http or https URL.") }
         let url = try parse(input.contains("://") ? input : "https://" + input)
         var c = URLComponents(url:url,resolvingAgainstBaseURL:false)!
         if c.path.isEmpty { c.path = "/" }

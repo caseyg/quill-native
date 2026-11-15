@@ -81,6 +81,18 @@ extension CoreTests {
         XCTAssertTrue(html.contains("Two &lt;trees&gt;"))
         XCTAssertFalse(html.contains("quill-attachment:"))
     }
+    func testBlankDraftsAreNotWorthKeeping() {
+        var review = Draft(kind:.review); review.fields["rating"] = "5"
+        XCTAssertTrue(review.isBlank)
+        var trip = Draft(kind:.itinerary); trip.legs = [Leg(departure:"2030-01-01T00:00:00Z")]
+        XCTAssertTrue(trip.isBlank)
+        var note = Draft(kind:.note); note.content = "  \n"
+        XCTAssertTrue(note.isBlank)
+        note.content = "Hello"
+        XCTAssertFalse(note.isBlank)
+        var like = Draft(kind:.like); like.target = "https://example.com/post"
+        XCTAssertFalse(like.isBlank)
+    }
     func testCanonicalSiteAddsRootPath() throws {
         XCTAssertEqual(try WebURL.site("example.com").absoluteString,"https://example.com/")
     }
