@@ -25,6 +25,11 @@ extension View {
     @ViewBuilder func prominentAction() -> some View {
         if #available(iOS 26.0, *) { buttonStyle(.glassProminent) } else { buttonStyle(.borderedProminent) }
     }
+
+    /// The secondary action beside a prominent one: clear glass on iOS 26 and later.
+    @ViewBuilder func secondaryAction() -> some View {
+        if #available(iOS 26.0, *) { buttonStyle(.glass) } else { buttonStyle(.bordered) }
+    }
 }
 
 /// A brief horizontal shake for a rejected input.

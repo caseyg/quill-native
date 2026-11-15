@@ -53,7 +53,7 @@ public enum Payload {
         if (d.visibility.isEmpty || d.visibility == "public") && !d.syndication.isEmpty { p[preferences.syndicationField] = strings(d.syndication) }
         switch d.kind {
         case .reply: put("in-reply-to", d.target); put("rsvp", d.fields["rsvp"] ?? "")
-        case .bookmark: put("bookmark-of", d.target)
+        case .bookmark: put("bookmark-of", d.target); put("summary", d.fields["summary"] ?? "")
         case .like: put("like-of", d.target)
         case .repost: put("repost-of", d.target)
         case .event:
