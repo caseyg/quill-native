@@ -26,7 +26,7 @@ for name in ('QuillNative','QuillShare','QuillNativeUITests'):
     product=add(name+'product','PBXFileReference',explicitFileType='wrapper.application' if ext=='app' else ('wrapper.app-extension' if ext=='appex' else 'wrapper.cfbundle'),includeInIndex=0,path=name+'.'+ext,sourceTree='BUILT_PRODUCTS_DIR')
     products.append(product)
     if name=='QuillNative': files=sorted(ROOT.glob('QuillNative/**/*.swift'))
-    elif name=='QuillShare': files=[ROOT/'ShareExtension/ShareViewController.swift',ROOT/'QuillNative/Services/SharedStorage.swift']
+    elif name=='QuillShare': files=sorted(ROOT.glob('ShareExtension/*.swift'))+[ROOT/'QuillNative/Services'/n for n in ('SharedStorage.swift','Keychain.swift','LinkContext.swift')]+[ROOT/'QuillNative/Support'/n for n in ('Compat.swift','Theme.swift')]
     else: files=sorted(ROOT.glob('QuillNativeUITests/*.swift'))
     builds=[]
     for f in files:

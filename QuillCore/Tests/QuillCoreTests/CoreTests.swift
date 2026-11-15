@@ -11,6 +11,20 @@ final class CoreTests: XCTestCase {
         XCTAssertNil(properties?["mp-syndicate-to"])
         XCTAssertEqual(properties?["visibility"], .array([.string("private")]))
     }
+    func testBookmarkSendsTitleSummaryNoteAndTags() throws {
+        var draft = Draft(kind: .bookmark)
+        draft.target = "https://example.com/article"
+        draft.title = "An Article"
+        draft.fields["summary"] = "What the page says about itself."
+        draft.content = "Why I saved it."
+        draft.tags = "reading, web"
+        let properties = try Payload.create(draft).object?["properties"]?.object
+        XCTAssertEqual(properties?["bookmark-of"], .array([.string("https://example.com/article")]))
+        XCTAssertEqual(properties?["name"], .array([.string("An Article")]))
+        XCTAssertEqual(properties?["summary"], .array([.string("What the page says about itself.")]))
+        XCTAssertEqual(properties?["content"], .array([.string("Why I saved it.")]))
+        XCTAssertEqual(properties?["category"], .array([.string("reading"), .string("web")]))
+    }
     func testWorkoutUsesSecondsAndNestedMeasures() throws {
         var draft = Draft(kind: .exercise)
         draft.fields = ["activity": "running", "minutes": "25", "heartrate": "132"]

@@ -82,11 +82,7 @@ final class AppStore {
 
     // MARK: Library
 
-    private var libraryStore: LibraryStore? {
-        guard let host = account?.me.host else { return nil }
-        let name = host + (account?.me.path == "/" ? "" : account!.me.path.replacingOccurrences(of: "/", with: "_"))
-        return LibraryStore(file: SharedStorage.root.appendingPathComponent("Library").appendingPathComponent(name + ".json"))
-    }
+    private var libraryStore: LibraryStore? { account.flatMap { SharedStorage.library(for: $0.me) } }
 
     func loadLibrary() {
         library = libraryStore?.load() ?? Library()
