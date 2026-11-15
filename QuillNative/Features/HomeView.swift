@@ -122,6 +122,7 @@ private struct PostRow: View {
     var status: String?
 
     var body: some View {
+        // Explicit Colors: inside a List Button, hierarchical .primary resolves to the tint.
         HStack(spacing: 14) {
             Image(systemName: symbol)
                 .font(.body)
@@ -129,13 +130,13 @@ private struct PostRow: View {
                 .frame(width: 28)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
-                Text(title).lineLimit(2).foregroundStyle(.primary)
+                Text(title).lineLimit(2).foregroundStyle(Color.primary)
                 HStack(spacing: 4) {
                     if let status { Text(status); Text("·") }
                     Text(date, format: .relative(presentation: .named))
                 }
                 .font(.footnote)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Color.secondary)
             }
         }
         .padding(.vertical, 2)

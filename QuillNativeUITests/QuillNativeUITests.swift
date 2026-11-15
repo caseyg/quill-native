@@ -116,8 +116,10 @@ final class QuillNativeUITests: XCTestCase {
         XCTAssertTrue(app.buttons["details"].waitForExistence(timeout: 5))
         app.buttons["details"].tap()
         let request = app.buttons["details.request"]
+        // Form rows are created lazily, so scroll the Details sheet until the row exists.
+        XCTAssertTrue(app.navigationBars["Details"].waitForExistence(timeout: 5))
+        for _ in 0..<6 where !request.exists || !request.isHittable { app.collectionViews.firstMatch.swipeUp() }
         XCTAssertTrue(request.waitForExistence(timeout: 5))
-        if !request.isHittable { app.swipeUp() }
         request.tap()
         XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "2030-12-01T12:00:00-05:00")).firstMatch.waitForExistence(timeout: 5))
     }
@@ -154,14 +156,30 @@ final class QuillNativeUITests: XCTestCase {
         XCTAssertTrue(row("localhost:8765/posts/test", in: app).waitForExistence(timeout: 5))
     }
 
+    /// README screenshots. Run on a fresh install with the fixture server up; images are test attachments.
     func testScreenshots() {
-        for (name, arguments) in [("home-light", []), ("home-dark", ["--dark"]), ("composer-light", route("note", ["text": "Hello from my own site."])), ("composer-dark", ["--dark"] + route("reply", ["reply": "https://example.com/post"]))] {
-            let app = launch(arguments)
-            XCTAssertTrue(app.buttons["compose"].waitForExistence(timeout: 5) || app.buttons["close"].waitForExistence(timeout: 5))
+        func capture(_ app: XCUIApplication, _ name: String) {
             sleep(1)
-            let capture = XCTAttachment(screenshot: app.screenshot()); capture.name = name; capture.lifetime = .keepAlways; add(capture)
-            app.terminate()
+            let shot = XCTAttachment(screenshot: app.screenshot()); shot.name = name; shot.lifetime = .keepAlways; add(shot)
         }
+        var app = launch(route("note", ["text": "Planted the first tomatoes of the year."]))
+        XCTAssertTrue(app.buttons["publish"].waitForExistence(timeout: 5)); app.buttons["publish"].tap()
+        XCTAssertTrue(app.buttons["compose"].waitForExistence(timeout: 15)); app.terminate()
+        for (kind, items) in [("bookmark", ["url": "https://indieweb.org/Micropub"]), ("note", ["text": "Notes on the new garden beds"])] {
+            app = launch(route(kind, items))
+            XCTAssertTrue(app.buttons["close"].waitForExistence(timeout: 5)); app.buttons["close"].tap()
+            XCTAssertTrue(app.buttons["compose"].waitForExistence(timeout: 5)); app.terminate()
+        }
+        app = launch()
+        XCTAssertTrue(app.buttons["compose"].waitForExistence(timeout: 5)); capture(app, "home-light")
+        app.buttons["compose"].tap()
+        XCTAssertTrue(content(in: app).waitForExistence(timeout: 5)); XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
+        capture(app, "composer-light"); app.terminate()
+        app = launch(["--dark"])
+        XCTAssertTrue(app.buttons["compose"].waitForExistence(timeout: 5)); capture(app, "home-dark"); app.terminate()
+        app = launch(fixture: false)
+        if app.textFields["login.site"].waitForExistence(timeout: 5) { capture(app, "sign-in-light") }
+        app.terminate()
     }
 
     /// Opt-in only: posts one real note to the signed-in site. Never retry after an ambiguous result.

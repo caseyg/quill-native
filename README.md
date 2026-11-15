@@ -2,6 +2,12 @@
 
 A Micropub client for iPhone and iPad. Sign in with your own website and post to it. Based on the features of [Aaron Parecki’s Quill](https://github.com/aaronpk/Quill). iOS 17 or later; Liquid Glass on iOS 26 and 27.
 
+## Screenshots
+
+| | | | |
+|---|---|---|---|
+| <img src="docs/screenshots/home-light.png" alt="Posts list with drafts and a posted note" width="200"> | <img src="docs/screenshots/composer-light.png" alt="Note composer with the keyboard up" width="200"> | <img src="docs/screenshots/home-dark.png" alt="Posts list in dark mode" width="200"> | <img src="docs/screenshots/sign-in-light.png" alt="Sign-in screen" width="200"> |
+
 ## Use
 
 Enter your domain and tap **Sign In**. The app finds your site’s IndieAuth and Micropub endpoints and signs in through the system browser. A site that only issues tokens can use **Use an Access Token** instead.
