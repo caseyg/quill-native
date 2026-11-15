@@ -1,150 +1,176 @@
 import XCTest
 
+/// Runs against the local fixture account. Start `python3 scripts/fixture_server.py` for the publishing tests.
 final class QuillNativeUITests: XCTestCase {
-    func testSaveResumeDraftAndValidation() {
-        let app = XCUIApplication(); app.launch()
-        app.buttons["compose.note"].tap()
-        let content = app.textViews["composer.content"].exists ? app.textViews["composer.content"] : app.textFields["composer.content"]
-        content.tap(); content.typeText("A thought saved on this device")
-        app.buttons["save.close"].tap()
-        tapTab("Drafts",app:app)
-        XCTAssertTrue(app.buttons.containing(.staticText,identifier:"A thought saved on this device").firstMatch.waitForExistence(timeout:5))
-        app.buttons.containing(.staticText,identifier:"A thought saved on this device").firstMatch.tap()
-        let resumed = app.textFields["composer.content"]
-        XCTAssertTrue(resumed.waitForExistence(timeout:5))
-        XCTAssertEqual(resumed.value as? String, "A thought saved on this device")
-    }
-    func testBlankNoteCannotPublish() {
-        let app = XCUIApplication(); app.launch(); app.buttons["compose.note"].tap()
-        app.swipeUp(); app.buttons["publish"].tap()
-        XCTAssertTrue(app.staticTexts["Write something before publishing."].waitForExistence(timeout:3))
-    }
-}
+    override func setUp() { continueAfterFailure = false }
 
-
-extension QuillNativeUITests {
-    func testEveryComposerOpens() {
+    private func launch(_ arguments: [String] = [], fixture: Bool = true) -> XCUIApplication {
         let app = XCUIApplication()
-        for kind in ["note","photo","reply","article","bookmark","like","repost","event","review","itinerary","code","weight","exercise"] {
-            app.launchArguments = ["--route","quill-native://" + kind]
-            app.launch()
-            XCTAssertTrue(app.buttons["save.close"].waitForExistence(timeout:5),"Missing composer: " + kind)
-            XCTAssertTrue(app.navigationBars[kind.capitalized].exists,"Missing title: " + kind)
-            app.buttons["save.close"].tap()
+        app.launchArguments = (fixture ? ["--fixture"] : []) + arguments
+        app.launch()
+        return app
+    }
+
+    private func route(_ path: String, _ items: [String: String] = [:]) -> [String] {
+        var components = URLComponents(string: "quill-native://" + path)!
+        if !items.isEmpty { components.queryItems = items.map { URLQueryItem(name: $0.key, value: $0.value) } }
+        return ["--route", components.url!.absoluteString]
+    }
+
+    /// A growing text field is a text view to XCUITest on some releases and a text field on others.
+    private func content(in app: XCUIApplication) -> XCUIElement {
+        let view = app.textViews["composer.content"]
+        return view.waitForExistence(timeout: 3) ? view : app.textFields["composer.content"]
+    }
+
+    private func row(_ text: String, in app: XCUIApplication) -> XCUIElement {
+        app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", text)).firstMatch
+    }
+
+    func testSignInTakesABareDomainAndNothingElse() throws {
+        let app = launch(fixture: false)
+        let site = app.textFields["login.site"]
+        guard site.waitForExistence(timeout: 5) else { throw XCTSkip("This simulator is already signed in.") }
+        XCTAssertFalse(app.buttons["login.button"].isEnabled)
+        XCTAssertFalse(app.textFields["login.clientID"].exists)
+        site.tap(); site.typeText("example.com")
+        XCTAssertTrue(app.buttons["login.button"].isEnabled)
+        app.buttons["login.mode"].tap()
+        XCTAssertTrue(app.secureTextFields["login.token"].waitForExistence(timeout: 3))
+        XCTAssertFalse(app.buttons["login.button"].isEnabled)
+    }
+
+    func testDraftSavesOnCloseAndResumes() {
+        let text = "A thought saved on this device \(Int(Date().timeIntervalSince1970))"
+        let app = launch()
+        XCTAssertTrue(app.buttons["compose"].waitForExistence(timeout: 5))
+        app.buttons["compose"].tap()
+        let field = content(in: app)
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.tap(); field.typeText(text)
+        app.buttons["close"].tap()
+        let saved = row(text, in: app)
+        XCTAssertTrue(saved.waitForExistence(timeout: 5))
+        saved.tap()
+        let resumed = content(in: app)
+        XCTAssertTrue(resumed.waitForExistence(timeout: 5))
+        XCTAssertEqual(resumed.value as? String, text)
+    }
+
+    func testBlankNoteCannotPostAndLeavesNoDraft() {
+        let app = launch()
+        XCTAssertTrue(app.buttons["compose"].waitForExistence(timeout: 5))
+        let before = app.cells.count
+        app.buttons["compose"].tap()
+        XCTAssertTrue(app.buttons["publish"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["publish"].isEnabled)
+        app.buttons["close"].tap()
+        XCTAssertTrue(app.buttons["compose"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.cells.count, before)
+    }
+
+    func testEveryComposerOpens() {
+        for kind in ["note", "photo", "reply", "article", "bookmark", "like", "repost", "event", "review", "itinerary", "code", "weight", "exercise"] {
+            let app = launch(route(kind))
+            XCTAssertTrue(app.buttons["close"].waitForExistence(timeout: 5), "Missing composer: " + kind)
+            let bar = app.navigationBars.firstMatch
+            let title = kind.capitalized
+            XCTAssertTrue(app.navigationBars[title].exists || bar.buttons[title].exists || bar.staticTexts[title].exists, "Missing title: " + kind)
             app.terminate()
         }
     }
-    func testFixturePublicationAndReceipt() {
-        let app = XCUIApplication()
-        app.launchArguments = ["--fixture","--route","quill-native://note?text=Local%20fixture%20publishing%20check"]
-        app.launch()
-        XCTAssertTrue(app.buttons["save.close"].waitForExistence(timeout:5))
-        app.swipeUp()
+
+    func testPostingClosesTheComposerAndListsThePost() {
+        let text = "Local fixture publishing check \(Int(Date().timeIntervalSince1970))"
+        let app = launch(route("note", ["text": text]))
+        XCTAssertTrue(app.buttons["publish"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["publish"].isEnabled)
         app.buttons["publish"].tap()
-        let send = app.buttons["Send to site"]
-        XCTAssertTrue(send.waitForExistence(timeout:3)); send.tap()
-        XCTAssertTrue(app.staticTexts.containing(NSPredicate(format:"label CONTAINS %@","Published: http://localhost:8765/posts/test")).firstMatch.waitForExistence(timeout:15))
+        XCTAssertTrue(app.staticTexts["Posted"].waitForExistence(timeout: 15), "Is scripts/fixture_server.py running?")
+        XCTAssertTrue(row(text, in: app).exists)
+        XCTAssertFalse(app.buttons["publish"].exists)
     }
-}
 
-
-extension QuillNativeUITests {
-    func testAppIntentPreservesTextWithExistingStore() {
-        let app = XCUIApplication(); app.launchArguments = ["--run-note-intent"]; app.launch()
-        let content = app.textFields["composer.content"]
-        XCTAssertTrue(content.waitForExistence(timeout:5))
-        XCTAssertEqual(content.value as? String,"Intent handoff with preserved text")
+    func testInvalidTargetShowsInlineError() {
+        let app = launch(route("like", ["url": "not a link"]))
+        XCTAssertTrue(app.buttons["publish"].waitForExistence(timeout: 5))
+        app.buttons["publish"].tap()
+        XCTAssertTrue(app.staticTexts["composer.error"].waitForExistence(timeout: 3) || app.otherElements["composer.error"].waitForExistence(timeout: 1))
+        XCTAssertTrue(app.buttons["close"].exists)
     }
+
+    func testAppIntentPreservesText() {
+        let app = launch(["--run-note-intent"])
+        let field = content(in: app)
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        XCTAssertEqual(field.value as? String, "Intent handoff with preserved text")
+    }
+
     func testDatedDraftSurvivesResume() {
-        let app = XCUIApplication()
-        app.launchArguments = ["--route","quill-native://note?text=Dated%20draft%20regression&published=2030-12-01T12%3A00%3A00-05%3A00"]
-        app.launch(); XCTAssertTrue(app.buttons["save.close"].waitForExistence(timeout:5)); app.buttons["save.close"].tap()
-        tapTab("Drafts",app:app)
-        let saved = app.buttons.containing(.staticText,identifier:"Dated draft regression").firstMatch
-        XCTAssertTrue(saved.waitForExistence(timeout:5)); saved.tap()
-        app.buttons["Preview"].tap()
-        app.swipeUp()
-        let request = app.buttons["Micropub request"]
-        XCTAssertTrue(request.waitForExistence(timeout:3)); request.tap()
-        XCTAssertTrue(app.staticTexts.containing(NSPredicate(format:"label CONTAINS %@","2030-12-01T12:00:00-05:00")).firstMatch.waitForExistence(timeout:3))
+        let text = "Dated draft regression \(Int(Date().timeIntervalSince1970))"
+        let app = launch(route("note", ["text": text, "published": "2030-12-01T12:00:00-05:00"]))
+        XCTAssertTrue(app.buttons["close"].waitForExistence(timeout: 5))
+        app.buttons["close"].tap()
+        let saved = row(text, in: app)
+        XCTAssertTrue(saved.waitForExistence(timeout: 5)); saved.tap()
+        XCTAssertTrue(app.buttons["details"].waitForExistence(timeout: 5))
+        app.buttons["details"].tap()
+        let request = app.buttons["details.request"]
+        XCTAssertTrue(request.waitForExistence(timeout: 5))
+        if !request.isHittable { app.swipeUp() }
+        request.tap()
+        XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "2030-12-01T12:00:00-05:00")).firstMatch.waitForExistence(timeout: 5))
     }
-}
 
-extension QuillNativeUITests {
-    /// Opt-in only. Never run this automatically or retry after an ambiguous response.
-    func testAuthorizedLiveNotePublication() throws {
-        guard ProcessInfo.processInfo.environment["QUILL_LIVE_TEST"] == "1" else { throw XCTSkip("Requires explicit permission for one live test post and QUILL_LIVE_TEST=1.") }
-        let app = XCUIApplication()
-        let content = "Quill Native test post — native iOS publishing verification, November 13, 2026. This is the single authorized test post from the new SwiftUI app."
-        var components = URLComponents(string:"quill-native://note")!
-        components.queryItems = [URLQueryItem(name:"text",value:content)]
-        app.launchArguments = ["--route",components.url!.absoluteString]
-        app.launch()
-        XCTAssertTrue(app.buttons["save.close"].waitForExistence(timeout:5))
-        app.swipeUp(); app.buttons["publish"].tap()
-        let send = app.buttons["Send to site"]
-        XCTAssertTrue(send.waitForExistence(timeout:3)); send.tap()
-        let receipt = app.staticTexts.containing(NSPredicate(format:"label BEGINSWITH %@","Published: https://caseyagollan.com/")).firstMatch
-        XCTAssertTrue(receipt.waitForExistence(timeout:60),"Do not retry: check the website and retained draft first.")
-        if receipt.exists { print("LIVE_PUBLICATION_RECEIPT: " + receipt.label) }
-        let screenshot = XCTAttachment(screenshot:app.screenshot()); screenshot.name = "Authorized live publication receipt"; screenshot.lifetime = .keepAlways; add(screenshot)
+    func testSettingsOpensAndCloses() {
+        let app = launch()
+        XCTAssertTrue(app.buttons["settings"].waitForExistence(timeout: 5))
+        app.buttons["settings"].tap()
+        XCTAssertTrue(app.buttons["signout"].waitForExistence(timeout: 5))
+        app.buttons["Done"].tap()
+        XCTAssertTrue(app.buttons["compose"].waitForExistence(timeout: 5))
     }
-}
 
-extension QuillNativeUITests {
     func testShareExtensionSavesURLDraft() {
-        let safari = XCUIApplication(bundleIdentifier:"com.apple.mobilesafari")
+        let safari = XCUIApplication(bundleIdentifier: "com.apple.mobilesafari")
         safari.terminate()
-        safari.open(URL(string:"http://localhost:8765/posts/test")!)
+        safari.open(URL(string: "http://localhost:8765/posts/test")!)
         let share = safari.buttons["Share"].firstMatch
-        if !share.waitForExistence(timeout:3) { safari.buttons["More"].firstMatch.tap() }
-        XCTAssertTrue(share.waitForExistence(timeout:5)); share.tap()
+        if !share.waitForExistence(timeout: 3) { safari.buttons["More"].firstMatch.tap() }
+        XCTAssertTrue(share.waitForExistence(timeout: 5)); share.tap()
         let quill = safari.cells["Quill"].firstMatch
-        if !quill.waitForExistence(timeout:2) {
+        if !quill.waitForExistence(timeout: 2) {
             let more = safari.cells["More"].firstMatch
             if more.exists { more.tap() }
         }
-        XCTAssertTrue(quill.waitForExistence(timeout:5)); quill.tap()
-        let save = safari.buttons["Save draft"].firstMatch
+        XCTAssertTrue(quill.waitForExistence(timeout: 5)); quill.tap()
+        let save = safari.buttons["Save"].firstMatch
         let post = safari.buttons["Post"].firstMatch
-        let action = save.waitForExistence(timeout:3) ? save : post
-        XCTAssertTrue(action.waitForExistence(timeout:3)); action.tap()
-        let closed = XCTNSPredicateExpectation(predicate:NSPredicate(format:"exists == false"),object:action)
-        XCTAssertEqual(XCTWaiter.wait(for:[closed],timeout:10),.completed)
-        let app = XCUIApplication(); app.launchArguments = []; app.launch(); tapTab("Drafts",app:app)
-        XCTAssertTrue(app.buttons.containing(NSPredicate(format:"label CONTAINS %@","localhost:8765/posts/test")).firstMatch.waitForExistence(timeout:5))
+        let action = save.waitForExistence(timeout: 3) ? save : post
+        XCTAssertTrue(action.waitForExistence(timeout: 3)); action.tap()
+        let closed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: action)
+        XCTAssertEqual(XCTWaiter.wait(for: [closed], timeout: 10), .completed)
+        let app = launch()
+        XCTAssertTrue(row("localhost:8765/posts/test", in: app).waitForExistence(timeout: 5))
     }
-    func testHomeDarkLayout() {
-        let app = XCUIApplication(); app.launchArguments = ["--dark"]; app.launch()
-        XCTAssertTrue(app.buttons["compose.note"].waitForExistence(timeout:5))
-        let capture = XCTAttachment(screenshot:app.screenshot()); capture.name = "Quill home dark"; capture.lifetime = .keepAlways; add(capture)
+
+    func testScreenshots() {
+        for (name, arguments) in [("home-light", []), ("home-dark", ["--dark"]), ("composer-light", route("note", ["text": "Hello from my own site."])), ("composer-dark", ["--dark"] + route("reply", ["reply": "https://example.com/post"]))] {
+            let app = launch(arguments)
+            XCTAssertTrue(app.buttons["compose"].waitForExistence(timeout: 5) || app.buttons["close"].waitForExistence(timeout: 5))
+            sleep(1)
+            let capture = XCTAttachment(screenshot: app.screenshot()); capture.name = name; capture.lifetime = .keepAlways; add(capture)
+            app.terminate()
+        }
     }
-}
 
-
-private func tapTab(_ name: String, app: XCUIApplication) {
-    if app.tabBars.buttons[name].exists { app.tabBars.buttons[name].tap() }
-    else if app.cells[name].exists { app.cells[name].firstMatch.tap() }
-    else if app.buttons[name].exists { app.buttons[name].firstMatch.tap() }
-    else { app.otherElements[name].firstMatch.tap() }
-}
-
-extension QuillNativeUITests {
-    func testLoginRequiresBothFullURLs() {
-        let app = XCUIApplication(); app.launchArguments = ["--route","quill-native://settings"]; app.launch()
-        let website = app.textFields["login.site"]
-        let client = app.textFields["login.clientID"]
-        XCTAssertTrue(website.waitForExistence(timeout:5))
-        XCTAssertTrue(client.exists)
-        website.tap(); website.typeText("caseyagollan.com")
-        XCTAssertFalse(app.buttons["login.button"].isEnabled)
-        website.typeText(String(repeating:XCUIKeyboardKey.delete.rawValue,count:"caseyagollan.com".count) + "https://caseyagollan.com/")
-        XCTAssertTrue(app.buttons["login.button"].isEnabled)
-        let originalClient = client.value as? String ?? ""
-        client.tap(); client.typeText(String(repeating:XCUIKeyboardKey.delete.rawValue,count:originalClient.count) + "caseyagollan.com/clients/quill-native/")
-        XCTAssertFalse(app.buttons["login.button"].isEnabled)
-        let bareClient = "caseyagollan.com/clients/quill-native/"
-        client.typeText(String(repeating:XCUIKeyboardKey.delete.rawValue,count:bareClient.count) + "https://caseyagollan.com/clients/quill-native/")
-        XCTAssertTrue(app.buttons["login.button"].isEnabled)
+    /// Opt-in only: posts one real note to the signed-in site. Never retry after an ambiguous result.
+    func testAuthorizedLiveNotePublication() throws {
+        guard ProcessInfo.processInfo.environment["QUILL_LIVE_TEST"] == "1" else { throw XCTSkip("Posts to a real site. Set QUILL_LIVE_TEST=1 to allow one test post.") }
+        let app = launch(route("note", ["text": "Test post from Quill for iOS."]), fixture: false)
+        XCTAssertTrue(app.buttons["publish"].waitForExistence(timeout: 5))
+        app.buttons["publish"].tap()
+        XCTAssertTrue(app.staticTexts["Posted"].waitForExistence(timeout: 60), "Do not retry: check the site and the kept draft first.")
+        let screenshot = XCTAttachment(screenshot: app.screenshot()); screenshot.name = "Live post"; screenshot.lifetime = .keepAlways; add(screenshot)
     }
 }

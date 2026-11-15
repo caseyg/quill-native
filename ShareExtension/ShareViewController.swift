@@ -6,13 +6,13 @@ import QuillCore
 final class ShareViewController: SLComposeServiceViewController {
     private var kind: PostKind = .note
     override func isContentValid() -> Bool { true }
-    override func viewDidLoad() { super.viewDidLoad(); title = "Save to Quill"; navigationController?.navigationBar.topItem?.rightBarButtonItem?.title = "Save draft" }
+    override func viewDidLoad() { super.viewDidLoad(); title = "Quill"; navigationController?.navigationBar.topItem?.rightBarButtonItem?.title = "Save" }
     override func configurationItems() -> [Any]! {
         let item = SLComposeSheetConfigurationItem()!
-        item.title = "Post type"; item.value = kind.title
+        item.title = "Type"; item.value = kind.title
         item.tapHandler = { [weak self] in
             guard let self else { return }
-            let alert = UIAlertController(title:"Save as",message:nil,preferredStyle:.actionSheet)
+            let alert = UIAlertController(title:nil,message:nil,preferredStyle:.actionSheet)
             for kind in [PostKind.note,.bookmark,.reply,.like,.repost,.photo] { alert.addAction(UIAlertAction(title:kind.title,style:.default) { _ in self.kind = kind; self.reloadConfigurationItems() }) }
             alert.addAction(UIAlertAction(title:"Cancel",style:.cancel)); alert.popoverPresentationController?.sourceView = self.view; self.present(alert,animated:true)
         }
@@ -41,12 +41,12 @@ final class ShareViewController: SLComposeServiceViewController {
                 try SharedStorage.drafts.save(draft)
                 extensionContext?.completeRequest(returningItems:[],completionHandler:nil)
             } catch {
-                let alert = UIAlertController(title:"Could not save draft",message:error.localizedDescription,preferredStyle:.alert)
+                let alert = UIAlertController(title:"Couldn’t Save",message:error.localizedDescription,preferredStyle:.alert)
                 alert.addAction(UIAlertAction(title:"OK",style:.default)); present(alert,animated:true)
             }
         }
     }
     private func load(_ provider: NSItemProvider,type: String) async throws -> NSSecureCoding {
-        try await withCheckedThrowingContinuation { continuation in provider.loadItem(forTypeIdentifier:type,options:nil) { item,error in if let error { continuation.resume(throwing:error) } else if let item { continuation.resume(returning:item) } else { continuation.resume(throwing:QuillError("This shared item could not be read.")) } } }
+        try await withCheckedThrowingContinuation { continuation in provider.loadItem(forTypeIdentifier:type,options:nil) { item,error in if let error { continuation.resume(throwing:error) } else if let item { continuation.resume(returning:item) } else { continuation.resume(throwing:QuillError("This item couldn’t be read.")) } } }
     }
 }

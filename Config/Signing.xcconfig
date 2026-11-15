@@ -1,4 +1,7 @@
 // Device signing is machine-local. See Signing.local.example.xcconfig.
 CODE_SIGN_STYLE = Automatic
 REGISTER_APP_GROUPS = YES
+// The public page that identifies this app to IndieAuth servers (docs/index.html, served by GitHub Pages).
+// A fork should point this at a page it hosts. "/$()/" keeps "//" from starting a comment.
+QUILL_CLIENT_ID = https:/$()/caseyg.github.io/quill-native/
 #include? "Signing.local.xcconfig"

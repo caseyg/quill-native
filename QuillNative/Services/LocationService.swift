@@ -12,11 +12,11 @@ final class LocationService: NSObject, @preconcurrency CLLocationManagerDelegate
         loading = true; error = nil
         if manager.authorizationStatus == .notDetermined { manager.requestWhenInUseAuthorization() }
         else if manager.authorizationStatus == .authorizedWhenInUse || manager.authorizationStatus == .authorizedAlways { manager.requestLocation() }
-        else { error = "Enable location access for Quill in Settings, or enter a location manually."; loading = false }
+        else { error = "Location access is off for Quill."; loading = false }
     }
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         if loading && (manager.authorizationStatus == .authorizedWhenInUse || manager.authorizationStatus == .authorizedAlways) { manager.requestLocation() }
-        else if manager.authorizationStatus == .denied { loading = false; error = "Location access was declined." }
+        else if manager.authorizationStatus == .denied { loading = false; error = "Location access is off for Quill." }
     }
     func locationManager(_ manager: CLLocationManager,didUpdateLocations locations: [CLLocation]) { coordinate = locations.last?.coordinate; loading = false }
     func locationManager(_ manager: CLLocationManager,didFailWithError error: Error) { self.error = error.localizedDescription; loading = false }

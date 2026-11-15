@@ -11,9 +11,9 @@ public struct SignInConfiguration: Equatable, Sendable {
 }
 
 public enum SignInDiscovery {
-    /// Discover endpoints from a fully qualified website URL.
+    /// Discover endpoints from a website address. A bare domain is treated as HTTPS.
     public static func discover(site: String, transport: @escaping MicropubClient.Transport = Network.send) async throws -> SignInConfiguration {
-        let inputURL = try WebURL.parse(site)
+        let inputURL = try WebURL.site(site)
         var request = URLRequest(url:inputURL)
         request.timeoutInterval = 20
         let (data,response) = try await transport(request)

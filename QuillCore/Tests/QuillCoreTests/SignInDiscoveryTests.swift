@@ -3,28 +3,37 @@ import XCTest
 
 final class SignInDiscoveryTests: XCTestCase {
     func testFullURLDiscoversEverythingNeededForLogin() async throws {
-        let connection = try await SignInDiscovery.discover(site:"  https://caseyagollan.com/  ",transport:{ request in
+        let connection = try await SignInDiscovery.discover(site:"  https://example.com/  ",transport:{ request in
             XCTAssertEqual(request.url?.scheme,"https")
             if request.url!.path == "/" {
                 let html = #"<link rel="micropub" href="/micropub"><link rel="indieauth-metadata" href="/.well-known/oauth-authorization-server">"#
                 return (Data(html.utf8),HTTPURLResponse(url:request.url!,statusCode:200,httpVersion:nil,headerFields:nil)!)
             }
-            let metadata = #"{"issuer":"https://caseyagollan.com/","authorization_endpoint":"https://caseyagollan.com/auth","token_endpoint":"https://caseyagollan.com/auth/token","scopes_supported":["create","update","media","draft"]}"#
+            let metadata = #"{"issuer":"https://example.com/","authorization_endpoint":"https://example.com/auth","token_endpoint":"https://example.com/auth/token","scopes_supported":["create","update","media","draft"]}"#
             return (Data(metadata.utf8),HTTPURLResponse(url:request.url!,statusCode:200,httpVersion:nil,headerFields:nil)!)
         })
-        XCTAssertEqual(connection.me.absoluteString,"https://caseyagollan.com/")
-        XCTAssertEqual(connection.authorizationEndpoint.absoluteString,"https://caseyagollan.com/auth")
-        XCTAssertEqual(connection.tokenEndpoint.absoluteString,"https://caseyagollan.com/auth/token")
-        XCTAssertEqual(connection.micropub.absoluteString,"https://caseyagollan.com/micropub")
+        XCTAssertEqual(connection.me.absoluteString,"https://example.com/")
+        XCTAssertEqual(connection.authorizationEndpoint.absoluteString,"https://example.com/auth")
+        XCTAssertEqual(connection.tokenEndpoint.absoluteString,"https://example.com/auth/token")
+        XCTAssertEqual(connection.micropub.absoluteString,"https://example.com/micropub")
         XCTAssertEqual(connection.scopes,"create update media draft")
     }
-    func testBareDomainIsRejectedUntilSchemeIsProvided() async {
+    func testBareDomainSignsInOverHTTPS() async throws {
+        let connection = try await SignInDiscovery.discover(site:" example.com ",transport:{ request in
+            XCTAssertEqual(request.url?.absoluteString,"https://example.com/")
+            let header = "</auth>; rel=authorization_endpoint, </token>; rel=token_endpoint, </mp>; rel=micropub"
+            return (Data(),HTTPURLResponse(url:request.url!,statusCode:200,httpVersion:nil,headerFields:["Link":header])!)
+        })
+        XCTAssertEqual(connection.me.absoluteString,"https://example.com/")
+        XCTAssertEqual(connection.micropub.absoluteString,"https://example.com/mp")
+    }
+    func testInvalidAddressIsRejectedBeforeAnyRequest() async {
         do {
-            _ = try await SignInDiscovery.discover(site:"caseyagollan.com",transport:{ _ in
+            _ = try await SignInDiscovery.discover(site:"not a site",transport:{ _ in
                 XCTFail("Invalid input must be rejected before any request")
                 throw QuillError("Unexpected request")
             })
-            XCTFail("A full URL is required")
+            XCTFail("An invalid address must be rejected")
         } catch { XCTAssertTrue(error.localizedDescription.contains("URL")) }
     }
     func testLegacyEndpointDiscoveryNeedsNoNameOrMetadataInput() async throws {
