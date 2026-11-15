@@ -1,0 +1,139 @@
+import XCTest
+@testable import QuillCore
+
+final class LibraryTests: XCTestCase {
+    private func ok(_ url: URL, _ body: String, status: Int = 200) -> (Data, HTTPURLResponse) {
+        (Data(body.utf8), HTTPURLResponse(url: url, statusCode: status, httpVersion: nil, headerFields: nil)!)
+    }
+
+    func testListingFollowsPagingUntilTheEnd() async throws {
+        let endpoint = URL(string: "https://example.com/micropub")!
+        let client = MicropubClient(endpoint: endpoint, token: "t", transport: { req in
+            let query = URLComponents(url: req.url!, resolvingAgainstBaseURL: false)!.queryItems!
+            XCTAssertTrue(query.contains(URLQueryItem(name: "q", value: "source")))
+            if query.contains(where: { $0.name == "after" }) {
+                return self.ok(req.url!, #"{"items":[{"type":["h-entry"],"properties":{"url":["https://example.com/2"],"content":["Second"],"published":["2026-11-01T10:00:00Z"]}}]}"#)
+            }
+            return self.ok(req.url!, #"{"items":[{"type":["h-entry"],"properties":{"url":["https://example.com/1"],"name":["Hello"],"content":[{"html":"<p>Body</p>","value":"Body"}],"published":["2026-11-02T10:00:00Z"]}}],"paging":{"after":"abc"}}"#)
+        })
+        let result = try await LibrarySync.fetch(client: client, me: URL(string: "https://example.com/")!)
+        XCTAssertEqual(result.source, .micropub)
+        XCTAssertEqual(result.posts.map(\.url.absoluteString), ["https://example.com/1", "https://example.com/2"])
+        XCTAssertEqual(result.posts[0].kind, .article)
+        XCTAssertEqual(result.posts[1].kind, .note)
+    }
+
+    func testFallsBackToJSONFeedWhenListingIsUnsupported() async throws {
+        let endpoint = URL(string: "https://example.com/micropub")!
+        let client = MicropubClient(endpoint: endpoint, token: "t", transport: { req in self.ok(req.url!, #"{"error":"invalid_request"}"#, status: 400) })
+        let result = try await LibrarySync.fetch(client: client, me: URL(string: "https://example.com/")!, fetch: { req in
+            if req.url!.path == "/" { return self.ok(req.url!, #"<link rel="alternate" type="application/rss+xml" href="/feed.xml"><link rel="alternate" type="application/feed+json" href="/feed.json">"#) }
+            XCTAssertEqual(req.url!.path, "/feed.json")
+            return self.ok(req.url!, #"{"version":"https://jsonfeed.org/version/1.1","items":[{"id":"1","url":"https://example.com/p/1","content_html":"<p><img src=\"https://example.com/a.jpg\" alt=\"A heron\"></p>","date_published":"2026-11-15T15:30:53.000Z"}]}"#)
+        })
+        XCTAssertEqual(result.source, .feed)
+        XCTAssertEqual(result.posts.first?.kind, .photo)
+        XCTAssertEqual(result.posts.first?.photo?.absoluteString, "https://example.com/a.jpg")
+        XCTAssertEqual(result.posts.first?.displayTitle, "A heron")
+        XCTAssertNotNil(result.posts.first?.published)
+    }
+
+    func testRSSEntriesParse() {
+        let rss = #"<rss><channel><item><title>Post</title><link>https://example.com/a</link><description><![CDATA[<p>Words here</p>]]></description><pubDate>Sat, 14 Nov 2026 20:24:13 +0000</pubDate></item></channel></rss>"#
+        let posts = Feed.parse(Data(rss.utf8)).posts
+        XCTAssertEqual(posts.first?.url.absoluteString, "https://example.com/a")
+        XCTAssertEqual(posts.first?.text, "Words here")
+        XCTAssertNotNil(posts.first?.published)
+    }
+
+    func testPhotoPostsUseBodyThenAltForTitle() {
+        let item = JSONValue.object(["type": .array([.string("h-entry")]), "properties": .object([
+            "url": .array([.string("https://example.com/p")]),
+            "photo": .array([.object(["value": .string("https://example.com/p.jpg"), "alt": .string("Sunset over the river")])]),
+        ])])
+        let post = Post(mf2: item)!
+        XCTAssertEqual(post.kind, .photo)
+        XCTAssertEqual(post.displayTitle, "Sunset over the river")
+        var draft = Draft(kind: .photo)
+        draft.attachments = [Attachment(data: Data(), filename: "a.jpg", mimeType: "image/jpeg", alt: "A dog")]
+        XCTAssertEqual(draft.displayTitle, "A dog")
+    }
+
+    func testSearchMatchesEveryTermAcrossFields() {
+        var post = Post(url: URL(string: "https://example.com/1")!, kind: .note)
+        post.text = "Walked to the café"; post.categories = ["brooklyn"]
+        XCTAssertTrue(post.matches("cafe brooklyn"))
+        XCTAssertFalse(post.matches("cafe queens"))
+    }
+
+    func testFeedSyncKeepsOlderPostsAndSortsNewestFirst() {
+        var library = Library()
+        var old = Post(url: URL(string: "https://example.com/old")!, kind: .note); old.published = Date(timeIntervalSince1970: 1)
+        library.replace(with: [old], source: .feed)
+        var new = Post(url: URL(string: "https://example.com/new")!, kind: .note); new.published = Date(timeIntervalSince1970: 2)
+        library.replace(with: [new], source: .feed)
+        XCTAssertEqual(library.posts.map(\.url.lastPathComponent), ["new", "old"])
+        library.replace(with: [new], source: .micropub)
+        XCTAssertEqual(library.posts.count, 1)
+    }
+
+    func testEditingSendsOnlyChangedProperties() throws {
+        let source = JSONValue.object(["type": .array([.string("h-entry")]), "properties": .object([
+            "content": .array([.string("First *draft*")]),
+            "category": .array([.string("one")]),
+            "p3k-content-type": .array([.string("text/markdown")]),
+        ])])
+        var draft = try Draft(source: source, url: URL(string: "https://example.com/1")!)
+        XCTAssertEqual(draft.kind, .note)
+        XCTAssertThrowsError(try Payload.update(draft))
+        draft.content = "Second"
+        draft.tags = ""
+        let body = try Payload.update(draft).object!
+        XCTAssertEqual(body["replace"]?.object?["content"], .array([.string("Second")]))
+        XCTAssertEqual(body["replace"]?.object?["p3k-content-type"], .array([.string("text/markdown")]))
+        XCTAssertEqual(body["delete"], .array([.string("category")]))
+        XCTAssertNil(body["replace"]?.object?["name"])
+    }
+
+    func testRichHTMLStaysHTMLWhenEditing() throws {
+        let source = JSONValue.object(["properties": .object(["content": .array([.object(["html": .string("<blockquote>Quote</blockquote>")])])])])
+        let draft = try Draft(source: source, url: URL(string: "https://example.com/1")!)
+        XCTAssertTrue(draft.isHTML)
+        let plain = try Draft(source: .object(["properties": .object(["content": .array([.object(["html": .string("<p>Just words</p>")])])])]), url: URL(string: "https://example.com/2")!)
+        XCTAssertFalse(plain.isHTML)
+        XCTAssertEqual(plain.content, "Just words")
+    }
+
+    func testStructuredPostsAreNotEditedHere() {
+        XCTAssertThrowsError(try Draft(source: .object(["type": .array([.string("h-event")]), "properties": .object([:])]), url: URL(string: "https://example.com/e")!))
+    }
+}
+
+final class MarkdownTests: XCTestCase {
+    func testMarkdownNoteIsMarkedForTheServer() throws {
+        var draft = Draft(kind: .note); draft.content = "Hello *there*"; draft.fields["p3k-content-type"] = "text/markdown"
+        let p = try Payload.create(draft).object?["properties"]?.object
+        XCTAssertEqual(p?["content"], .array([.string("Hello *there*")]))
+        XCTAssertEqual(p?["p3k-content-type"], .array([.string("text/markdown")]))
+    }
+    func testMarkdownArticleAppendsImagesAsMarkdown() throws {
+        var draft = Draft(kind: .article); draft.title = "T"; draft.content = "# Heading"; draft.fields["p3k-content-type"] = "text/markdown"
+        var photo = Attachment(data: Data(), filename: "a.jpg", mimeType: "image/jpeg", alt: "A cat"); photo.remoteURL = URL(string: "https://example.com/a.jpg")
+        draft.attachments = [photo]
+        let p = try Payload.create(draft).object?["properties"]?.object
+        XCTAssertEqual(p?["content"], .array([.string("# Heading\n\n![A cat](https://example.com/a.jpg)")]))
+    }
+    func testHTMLDraftsIgnoreMarkdownMarker() throws {
+        var draft = Draft(kind: .article); draft.content = "<p>x</p>"; draft.isHTML = true
+        XCTAssertNil(try Payload.create(draft).object?["properties"]?.object?["p3k-content-type"])
+    }
+    func testOldPreferencesStillLoad() throws {
+        let prefs = try JSONDecoder().decode(Preferences.self, from: Data(#"{"weightUnit":"kg"}"#.utf8))
+        XCTAssertEqual(prefs.weightUnit, "kg")
+        XCTAssertFalse(prefs.markdown)
+        XCTAssertEqual(prefs.visibleKinds.count, PostKind.allCases.count)
+    }
+    func testMarkdownTextForRows() {
+        XCTAssertEqual(Markdown.text("Happy bday to [@shannon](https://bsky.app/x) **today**"), "Happy bday to @shannon today")
+    }
+}

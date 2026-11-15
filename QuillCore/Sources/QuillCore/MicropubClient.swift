@@ -50,7 +50,7 @@ public enum Network {
     }
     public static func check(_ response: HTTPURLResponse) throws {
         guard (200..<300).contains(response.statusCode) else {
-            throw QuillError("Your site returned HTTP \(response.statusCode). \([401,403].contains(response.statusCode) ? "Check your sign-in and granted permissions." : "Your draft is safe. Check the site before retrying.")")
+            throw QuillError("Your site returned HTTP \(response.statusCode). \([401,403].contains(response.statusCode) ? "Check your sign-in and granted permissions." : "Your draft is safe. Check the site before retrying.")", status: response.statusCode)
         }
     }
 }
@@ -159,18 +159,15 @@ public struct MicropubClient {
         return url
     }
     public func source(_ url: URL) async throws -> Draft {
-        let value = try JSONDecoder().decode(JSONValue.self,from:await query("source",parameters:["url":url.absoluteString]))
-        guard let p = value.object?["properties"]?.object else { throw QuillError("The source response contains no properties.") }
-        func first(_ key: String) -> String { p[key]?.array?.first?.string ?? "" }
-        let kind: PostKind
-        if p["like-of"] != nil { kind = .like }
-        else if p["repost-of"] != nil { kind = .repost }
-        else if first("p3k-content-type").hasPrefix("code/") { kind = .code }
-        else { throw QuillError("Like, repost and code updates are supported, matching Quill’s editing interfaces.") }
-        var d = Draft(kind:kind); d.editURL = url; d.title = first("name"); d.content = first("content")
-        d.target = first(kind == .like ? "like-of" : "repost-of")
-        d.fields["language"] = first("p3k-content-type").replacingOccurrences(of:"code/",with:"")
-        return d
+        // p3k-content-type asks Quill-compatible servers for Markdown source instead of rendered HTML.
+        let data = try await query("source", parameters: ["url": url.absoluteString, "p3k-content-type": "text/markdown"])
+        return try Draft(source: JSONDecoder().decode(JSONValue.self, from: data), url: url)
+    }
+    public func delete(_ url: URL) async throws {
+        var req = request(endpoint, method: "POST")
+        req.httpBody = try JSONValue.object(["action": .string("delete"), "url": .string(url.absoluteString)]).encoded()
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        let (_, response) = try await transport(req); try Network.check(response)
     }
 }
 

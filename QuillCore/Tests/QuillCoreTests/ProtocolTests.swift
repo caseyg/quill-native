@@ -82,7 +82,7 @@ extension ProtocolTests {
     func testCodeUpdateOnlyReplacesEditableFields() throws {
         var d = Draft(kind:.code); d.content = "print(1)"; d.editURL = URL(string:"https://example.com/1")!
         let value = try Payload.update(d)
-        XCTAssertEqual(Set(value.object?["replace"]?.object?.keys.map{$0} ?? []),Set(["content"]))
+        XCTAssertEqual(Set(value.object?["replace"]?.object?.keys.map{$0} ?? []),Set(["content","p3k-content-type"]))
     }
 }
 

@@ -95,10 +95,20 @@ public struct Draft: Codable, Identifiable, Equatable, Sendable {
     public var legs: [Leg] = []
     public var attachments: [Attachment] = []
     public var editURL: URL?
+    /// The edited properties as they were fetched, so an update sends only what changed.
+    public var original: [String: String]?
     public var accountURL: URL?
     public var modified = Date()
     public init(kind: PostKind) { self.kind = kind }
-    public var displayTitle: String { !title.isEmpty ? title : (!content.isEmpty ? String(content.prefix(80)) : (!target.isEmpty ? target : "Untitled \(kind.rawValue)")) }
+    /// The title, else the body, else a photo description, else the link it responds to.
+    public var displayTitle: String {
+        let body = isHTML ? HTML.text(content) : content
+        for value in [title, body, attachments.first(where: { !$0.alt.isEmpty })?.alt ?? "", target] {
+            let line = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !line.isEmpty { return String(line.prefix(80)) }
+        }
+        return "Untitled \(kind.title)"
+    }
     /// True when nothing worth keeping has been entered, so closing the composer leaves no draft behind.
     public var isBlank: Bool {
         func empty(_ value: String) -> Bool { value.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty }
@@ -113,7 +123,25 @@ public struct Preferences: Codable, Equatable, Sendable {
     public var syndicationField = "mp-syndicate-to"
     public var htmlContent = true
     public var weightUnit = "lb"
+    /// Write posts as Markdown, marked with `p3k-content-type: text/markdown`, instead of HTML.
+    public var markdown = false
+    /// Post types left out of the new-post menu and the post list.
+    public var hiddenKinds: [PostKind] = []
     public init() {}
+    public init(from decoder: Decoder) throws {
+        // Every key is optional so settings saved by older versions still load.
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let d = Preferences()
+        slugField = try c.decodeIfPresent(String.self, forKey: .slugField) ?? d.slugField
+        syndicationField = try c.decodeIfPresent(String.self, forKey: .syndicationField) ?? d.syndicationField
+        htmlContent = try c.decodeIfPresent(Bool.self, forKey: .htmlContent) ?? d.htmlContent
+        weightUnit = try c.decodeIfPresent(String.self, forKey: .weightUnit) ?? d.weightUnit
+        markdown = try c.decodeIfPresent(Bool.self, forKey: .markdown) ?? d.markdown
+        hiddenKinds = (try? c.decodeIfPresent([PostKind].self, forKey: .hiddenKinds)) ?? d.hiddenKinds
+    }
+    public var visibleKinds: [PostKind] { PostKind.allCases.filter { !hiddenKinds.contains($0) } }
+    /// Kinds whose body can be written as Markdown.
+    public static let markdownKinds: [PostKind] = [.note, .photo, .reply, .article, .bookmark]
 }
 public struct Account: Codable, Equatable, Sendable {
     public var me: URL
@@ -140,7 +168,9 @@ public struct Receipt: Codable, Identifiable, Sendable {
 }
 public struct QuillError: LocalizedError, Equatable {
     public let message: String
-    public init(_ message: String) { self.message = message }
+    /// The HTTP status, when the error came from a server response.
+    public var status: Int?
+    public init(_ message: String, status: Int? = nil) { self.message = message; self.status = status }
     public var errorDescription: String? { message }
 }
 public enum WebURL {

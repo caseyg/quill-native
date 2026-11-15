@@ -40,8 +40,11 @@ public enum Payload {
         var p: [String: JSONValue] = [:]
         func put(_ key: String, _ value: String) { if !value.isEmpty { p[key] = strings([value]) } }
         put("name", d.title)
-        let content = d.kind == .article ? articleHTML(d) : d.content
+        let markdown = !d.isHTML && d.fields["p3k-content-type"] == "text/markdown" && Preferences.markdownKinds.contains(d.kind)
+        let content = d.kind == .article ? (markdown ? articleMarkdown(d) : articleHTML(d)) : d.content
         if !content.isEmpty { p["content"] = .array([d.isHTML && preferences.htmlContent ? .object(["html": .string(content)]) : .string(content)]) }
+        // Micropub defines plain text and HTML; Quill's p3k-content-type marks the text as Markdown.
+        if markdown && !content.isEmpty { put("p3k-content-type", "text/markdown") }
         put("category", "")
         let tags = d.tags.split(separator: ",").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
         if !tags.isEmpty { p["category"] = strings(tags) }
@@ -87,6 +90,14 @@ public enum Payload {
         if !photos.isEmpty && d.kind != .article { p["photo"] = .array(photos) }
         return nested(d.kind == .review ? "h-review" : (d.kind == .event ? "h-event" : "h-entry"), p)
     }
+    public static func articleMarkdown(_ draft: Draft) -> String {
+        func escape(_ value: String) -> String { value.replacingOccurrences(of: "]", with: "\\]").replacingOccurrences(of: "\n", with: " ") }
+        var images = draft.attachments.map { attachment in
+            "![\(escape(attachment.alt))](\(attachment.remoteURL?.absoluteString ?? "data:\(attachment.mimeType);base64,\(attachment.data.base64EncodedString())"))"
+        }
+        if let external = draft.fields["photo-url"], (try? WebURL.parse(external)) != nil { images.append("![](\(external))") }
+        return ([draft.content.trimmingCharacters(in: .whitespacesAndNewlines)] + images).filter { !$0.isEmpty }.joined(separator: "\n\n")
+    }
     public static func articleHTML(_ draft: Draft) -> String {
         func escape(_ value: String) -> String { value.replacingOccurrences(of:"&",with:"&amp;").replacingOccurrences(of:"<",with:"&lt;").replacingOccurrences(of:">",with:"&gt;").replacingOccurrences(of:"\"",with:"&quot;") }
         var html = draft.content.replacingOccurrences(of:#"<img\b[^>]*quill-attachment:[^>]*>"#,with:"",options:[.regularExpression,.caseInsensitive])
@@ -99,18 +110,33 @@ public enum Payload {
         else { html += images }
         return html
     }
+    /// A Micropub update that replaces or deletes only the properties changed since the post was fetched.
     public static func update(_ d: Draft, preferences: Preferences = Preferences()) throws -> JSONValue {
         guard let url = d.editURL else { throw QuillError("No post URL to update.") }
-        var properties: [String: JSONValue] = [:]
-        if d.kind == .code {
-            guard !d.content.isEmpty else { throw QuillError("Add content before updating.") }
-            properties["content"] = strings([d.content])
-            if !d.title.isEmpty { properties["name"] = strings([d.title]) }
-        } else if d.kind == .like || d.kind == .repost {
-            _ = try WebURL.parse(d.target)
-            properties[d.kind == .like ? "like-of" : "repost-of"] = strings([d.target])
-        } else { throw QuillError("This post type does not support updating.") }
-        let p = JSONValue.object(properties)
-        return .object(["action": .string("update"), "url": .string(url.absoluteString), "replace": p])
+        guard d.kind.isEditable else { throw QuillError("This post type does not support updating.") }
+        if let key = d.kind.targetProperty { _ = try WebURL.parse(d.target); _ = key }
+        let original = d.original ?? [:]
+        var replace: [String: JSONValue] = [:], removed: [String] = []
+        for (key, value) in d.editableValues.sorted(by: { $0.key < $1.key }) where value != (original[key] ?? "") {
+            let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed.isEmpty { if !(original[key] ?? "").isEmpty { removed.append(key) }; continue }
+            switch key {
+            case "category":
+                replace[key] = strings(value.split(separator: ",").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty })
+            case "content":
+                if d.isHTML { replace[key] = .array([.object(["html": .string(value)])]) }
+                else {
+                    replace[key] = strings([value])
+                    if d.kind == .code { replace["p3k-content-type"] = strings(["code/" + (d.fields["language"] ?? "text")]) }
+                    else if let format = d.fields["p3k-content-type"], !format.isEmpty { replace["p3k-content-type"] = strings([format]) }
+                }
+            default: replace[key] = strings([value])
+            }
+        }
+        guard !replace.isEmpty || !removed.isEmpty else { throw QuillError("Nothing has changed.") }
+        var body: [String: JSONValue] = ["action": .string("update"), "url": .string(url.absoluteString)]
+        if !replace.isEmpty { body["replace"] = .object(replace) }
+        if !removed.isEmpty { body["delete"] = strings(removed) }
+        return .object(body)
     }
 }

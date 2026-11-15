@@ -15,7 +15,9 @@ Enter your domain and tap **Sign In**. The app finds your site’s IndieAuth and
 - Tap the compose button for a note. Touch and hold it for another post type, or change the type from the title of an open post.
 - Closing a post keeps it as a draft. Closing an empty one leaves nothing behind.
 - The bar above the keyboard adds photos and location and opens Details: tags, slug, date, visibility, and the exact Micropub request.
-- Posts you send are listed under **Posted** with their links.
+- **Posts** lists everything on your site, downloaded with Micropub `q=source` and kept on the device for search. Sites without listing fall back to their feed, which usually holds only recent posts.
+- Tap a post to edit it. Swipe for **See on Web**, **Edit** and **Delete**. Updates send only what changed. Events, reviews and other structured posts open on the web.
+- **Settings → Post Types** hides types you don't use from the new-post menu and the list. **Markdown** writes posts as Markdown, sent as plain text with `p3k-content-type: text/markdown` (a Quill convention, since Micropub itself only defines text and HTML).
 
 Post types: note, photo, reply and RSVP, article, bookmark, like, repost, event, review, itinerary, code, weight, exercise.
 

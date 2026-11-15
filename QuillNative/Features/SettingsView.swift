@@ -22,6 +22,8 @@ struct SettingsView: View {
                 .textSelection(.enabled)
             }
             Section {
+                NavigationLink("Post Types") { PostTypesView() }
+                Toggle("Markdown", isOn: $store.preferences.markdown)
                 Picker("Weight Unit", selection: $store.preferences.weightUnit) {
                     Text("Pounds").tag("lb")
                     Text("Kilograms").tag("kg")
@@ -58,6 +60,28 @@ struct SettingsView: View {
     private var version: String {
         let info = Bundle.main.infoDictionary
         return "Version \(info?["CFBundleShortVersionString"] as? String ?? "1.0")"
+    }
+}
+
+/// Post types to offer when posting and to show in the list.
+private struct PostTypesView: View {
+    @Environment(AppStore.self) private var store
+
+    var body: some View {
+        List(PostKind.allCases) { kind in
+            Toggle(isOn: shown(kind)) { Label(kind.title, systemImage: kind.symbol) }
+                // Keep at least one type, so there is always something to post.
+                .disabled(store.preferences.visibleKinds == [kind])
+        }
+        .navigationTitle("Post Types")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func shown(_ kind: PostKind) -> Binding<Bool> {
+        Binding(get: { !store.preferences.hiddenKinds.contains(kind) }, set: { isOn in
+            store.preferences.hiddenKinds.removeAll { $0 == kind }
+            if !isOn { store.preferences.hiddenKinds.append(kind) }
+        })
     }
 }
 

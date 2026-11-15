@@ -98,7 +98,7 @@ struct ComposerDetails: View {
                 }
             }
             Section {
-                if draft.kind == .article { Toggle("Edit as HTML", isOn: $htmlSource) }
+                if draft.kind == .article && draft.isHTML { Toggle("Edit as HTML", isOn: $htmlSource) }
                 NavigationLink("Request") { RequestView(draft: draft, preferences: store.preferences) }
                     .accessibilityIdentifier("details.request")
             }

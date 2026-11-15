@@ -86,9 +86,10 @@ final class QuillNativeUITests: XCTestCase {
         XCTAssertTrue(app.buttons["publish"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["publish"].isEnabled)
         app.buttons["publish"].tap()
-        XCTAssertTrue(app.staticTexts["Posted"].waitForExistence(timeout: 15), "Is scripts/fixture_server.py running?")
-        XCTAssertTrue(row(text, in: app).exists)
+        XCTAssertTrue(app.buttons["compose"].waitForExistence(timeout: 15), "Is scripts/fixture_server.py running?")
         XCTAssertFalse(app.buttons["publish"].exists)
+        search(text, in: app)
+        XCTAssertTrue(row(text, in: app).waitForExistence(timeout: 5))
     }
 
     func testInvalidTargetShowsInlineError() {
@@ -122,6 +123,89 @@ final class QuillNativeUITests: XCTestCase {
         XCTAssertTrue(request.waitForExistence(timeout: 5))
         request.tap()
         XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "2030-12-01T12:00:00-05:00")).firstMatch.waitForExistence(timeout: 5))
+    }
+
+    /// Opens Settings, flips a switch and returns to the list.
+    private func setting(_ name: String, in app: XCUIApplication, postType: Bool = false, on: Bool) {
+        XCTAssertTrue(app.buttons["settings"].waitForExistence(timeout: 5))
+        app.buttons["settings"].tap()
+        if postType {
+            XCTAssertTrue(app.buttons["Post Types"].waitForExistence(timeout: 5))
+            app.buttons["Post Types"].tap()
+        }
+        let toggle = app.switches[name]
+        XCTAssertTrue(toggle.waitForExistence(timeout: 5))
+        if (toggle.value as? String == "1") != on { toggle.switches.firstMatch.tap() }
+        XCTAssertEqual(toggle.value as? String, on ? "1" : "0")
+        if postType { app.navigationBars["Post Types"].buttons.firstMatch.tap() }
+        XCTAssertTrue(app.buttons["Done"].waitForExistence(timeout: 5))
+        app.buttons["Done"].tap()
+    }
+
+    /// Filters the list, since posts sit below any drafts and lists only build rows on screen.
+    private func search(_ text: String, in app: XCUIApplication) {
+        let field = app.searchFields.firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.tap()
+        if let value = field.value as? String, !value.isEmpty, value != field.placeholderValue {
+            field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: value.count))
+        }
+        field.typeText(text)
+    }
+
+    func testPostLibraryListsSearchesAndEdits() {
+        let app = launch()
+        search("heron", in: app)
+        XCTAssertTrue(row("A heron on the river", in: app).waitForExistence(timeout: 15), "Is scripts/fixture_server.py running?")
+        search("cafe", in: app)
+        XCTAssertTrue(row("Trying the new café", in: app).waitForExistence(timeout: 5))
+        XCTAssertFalse(row("A heron on the river", in: app).exists)
+        row("Trying the new café", in: app).tap()
+        let field = content(in: app)
+        XCTAssertTrue(field.waitForExistence(timeout: 10))
+        XCTAssertEqual(field.value as? String, "Trying the new café on Atlantic")
+        app.buttons["close"].firstMatch.tap()
+        // An unchanged edit leaves no draft behind, so the post is listed once.
+        XCTAssertTrue(row("Trying the new café", in: app).waitForExistence(timeout: 5))
+        XCTAssertEqual(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Trying the new café")).count, 1)
+    }
+
+    func testHiddenPostTypesLeaveTheListAndMenu() {
+        let app = launch()
+        setting("Like", in: app, postType: true, on: false)
+        app.buttons["compose"].press(forDuration: 1)
+        XCTAssertTrue(app.buttons["Repost"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["Like"].exists)
+        app.buttons["Repost"].tap()
+        XCTAssertTrue(app.buttons["close"].firstMatch.waitForExistence(timeout: 5))
+        app.buttons["close"].firstMatch.tap()
+        search("example.com/article", in: app)
+        // The empty search state repeats the query, so look for the row's own label.
+        let likeRow = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "https://example.com/article")).firstMatch
+        XCTAssertFalse(likeRow.waitForExistence(timeout: 3))
+        app.terminate()
+        let again = launch()
+        setting("Like", in: again, postType: true, on: true)
+        search("example.com/article", in: again)
+        XCTAssertTrue(row("example.com/article", in: again).waitForExistence(timeout: 15), "Is scripts/fixture_server.py running?")
+    }
+
+    func testMarkdownSettingMarksPosts() throws {
+        let text = "Markdown *check* \(Int(Date().timeIntervalSince1970))"
+        let app = launch()
+        setting("Markdown", in: app, on: true)
+        defer { app.terminate(); let again = launch(); setting("Markdown", in: again, on: false) }
+        app.buttons["compose"].tap()
+        let field = content(in: app)
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.tap(); field.typeText(text)
+        app.buttons["publish"].tap()
+        XCTAssertTrue(app.buttons["compose"].waitForExistence(timeout: 15), "Is scripts/fixture_server.py running?")
+        search("Markdown check", in: app)
+        XCTAssertTrue(row("Markdown check", in: app).waitForExistence(timeout: 5))
+        let log = try String(contentsOfFile: "/private/tmp/quill-fixture-requests.jsonl", encoding: .utf8)
+        let request = try XCTUnwrap(log.split(separator: "\n").last { $0.contains("Markdown *check*") })
+        XCTAssertTrue(request.contains("p3k-content-type") && request.contains("markdown"), String(request))
     }
 
     func testSettingsOpensAndCloses() {
@@ -188,7 +272,7 @@ final class QuillNativeUITests: XCTestCase {
         let app = launch(route("note", ["text": "Test post from Quill for iOS."]), fixture: false)
         XCTAssertTrue(app.buttons["publish"].waitForExistence(timeout: 5))
         app.buttons["publish"].tap()
-        XCTAssertTrue(app.staticTexts["Posted"].waitForExistence(timeout: 60), "Do not retry: check the site and the kept draft first.")
+        XCTAssertTrue(app.buttons["compose"].waitForExistence(timeout: 60) && !app.buttons["publish"].exists, "Do not retry: check the site and the kept draft first.")
         let screenshot = XCTAttachment(screenshot: app.screenshot()); screenshot.name = "Live post"; screenshot.lifetime = .keepAlways; add(screenshot)
     }
 }
