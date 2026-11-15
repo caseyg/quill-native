@@ -38,7 +38,7 @@ struct ComposerView: View {
             .toolbarTitleMenu {
                 if draft.editURL == nil {
                     Picker("Post Type", selection: kind) {
-                        ForEach(PostKind.allCases) { Label($0.title, systemImage: $0.symbol).tag($0) }
+                        ForEach(store.preferences.visibleKinds.contains(draft.kind) ? store.preferences.visibleKinds : PostKind.allCases) { Label($0.title, systemImage: $0.symbol).tag($0) }
                     }
                 }
             }
@@ -98,7 +98,10 @@ struct ComposerView: View {
             .onAppear {
                 guard !appeared else { return }
                 appeared = true
-                saved = store.drafts.first { $0.id == draft.id }
+                // A post just fetched for editing is only kept as a draft once it changes.
+                saved = store.drafts.first { $0.id == draft.id } ?? (draft.editURL != nil ? draft : nil)
+                // Existing HTML opens as source, so formatting the editor can't show is kept.
+                if draft.editURL != nil && draft.isHTML && saved == draft { htmlSource = true }
                 focus = draft.kind.hasTarget && draft.target.isEmpty ? .target : .content
             }
             .onDisappear(perform: persist)
@@ -140,7 +143,7 @@ struct ComposerView: View {
                         .padding(.horizontal, 20)
                         .padding(.top, 6)
                 }
-                if draft.kind == .article && !htmlSource {
+                if draft.kind == .article && draft.isHTML && !htmlSource {
                     RichEditor(html: $draft.content, controller: rich)
                 } else {
                     TextEditor(text: $draft.content)
@@ -151,7 +154,7 @@ struct ComposerView: View {
                         .padding(.horizontal, 15)
                         .padding(.top, 4)
                         .focused($focus, equals: .content)
-                        .accessibilityLabel(draft.kind == .code ? "Code" : "HTML")
+                        .accessibilityLabel(draft.kind == .code ? "Code" : (draft.isHTML ? "HTML" : (draft.fields["p3k-content-type"] == "text/markdown" ? "Markdown" : "Text")))
                         .accessibilityIdentifier("composer.content")
                 }
                 photoStrip.padding(.horizontal, 20).padding(.vertical, 8)
@@ -312,19 +315,19 @@ struct ComposerView: View {
 
     private var actionBar: some View {
         HStack(spacing: 0) {
-            if draft.kind == .article && !htmlSource {
+            if draft.kind == .article && draft.isHTML && !htmlSource {
                 barButton("Bold", "bold") { rich.bold() }
                 barButton("Italic", "italic") { rich.italic() }
                 barButton("Heading", "textformat.size") { rich.heading() }
                 barButton("Link", "link") { linkText = ""; addingLink = true }
             }
-            if draft.kind.takesPhotos {
+            if draft.kind.takesPhotos && draft.editURL == nil {
                 barButton("Photo Library", "photo.on.rectangle") { showPhotos = true }
                 if UIImagePickerController.isSourceTypeAvailable(.camera) {
                     barButton("Take Photo", "camera") { showCamera = true }
                 }
             }
-            if draft.kind.takesLocation {
+            if draft.kind.takesLocation && draft.editURL == nil {
                 Button(action: toggleLocation) {
                     ZStack {
                         if location.loading { ProgressView() }
@@ -358,7 +361,7 @@ struct ComposerView: View {
     // MARK: State
 
     private var kind: Binding<PostKind> {
-        Binding(get: { draft.kind }, set: { new in withAnimation(.snappy) { draft.prepare(for: new) } })
+        Binding(get: { draft.kind }, set: { new in withAnimation(.snappy) { draft.prepare(for: new, markdown: store.preferences.markdown) } })
     }
 
     private var sendTitle: String {
@@ -366,7 +369,8 @@ struct ComposerView: View {
     }
 
     private var showsSyndication: Bool {
-        !store.config.targets.isEmpty && (draft.visibility.isEmpty || draft.visibility == "public")
+        // Updates change text only, so syndication is offered when posting.
+        draft.editURL == nil && !store.config.targets.isEmpty && (draft.visibility.isEmpty || draft.visibility == "public")
     }
 
     private var summary: [(symbol: String, text: String)] {

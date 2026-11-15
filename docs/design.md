@@ -4,7 +4,7 @@ The app should feel like it shipped with the phone. These are the rules it follo
 
 ## Structure
 
-- **One list, one button.** Home is a single list of drafts and sent posts with search and a compose button in the bottom bar, the arrangement Notes and Mail use. There are no tabs: nothing here is a separate area of the app.
+- **One list, one button.** Home is a single list of drafts and the site’s posts with search and a compose button in the bottom bar, the arrangement Notes and Mail use. There are no tabs: nothing here is a separate area of the app.
 - **The composer is the app.** A note opens with the keyboard up and nothing else on screen. Structured posts (event, review, itinerary, weight, exercise) use a standard form.
 - **The title names the post type and changes it.** A title menu replaces a grid of type cards.
 - **Sign-in asks for one thing**, a domain. The IndieAuth client ID is build configuration, not a question for the person signing in.

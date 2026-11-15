@@ -57,7 +57,7 @@ public enum OAuth {
     public static func requestedScopes(supported: [String]?) -> String {
         let base = ["create","update","media"]
         guard let supported else { return base.joined(separator:" ") }
-        return (base + ["draft"]).filter { supported.contains($0) }.joined(separator:" ")
+        return (base + ["draft","delete"]).filter { supported.contains($0) }.joined(separator:" ")
     }
     public static func callback(_ url: URL, expectedState: String, expectedIssuer: String? = nil) throws -> String {
         guard url.scheme == "quill-native", url.host == "oauth", let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems else { throw QuillError("Unexpected sign-in callback.") }
