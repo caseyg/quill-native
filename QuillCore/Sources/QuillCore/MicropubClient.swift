@@ -48,6 +48,18 @@ public enum Network {
         guard let response = response as? HTTPURLResponse else { throw QuillError("Your site returned a non-HTTP response.") }
         return (data, response)
     }
+    /// Reads at most `limit` bytes of the body, refusing early when the server announces more.
+    public static func send(_ request: URLRequest, limit: Int) async throws -> (Data, HTTPURLResponse) {
+        let (bytes, response) = try await session.bytes(for: request)
+        guard let response = response as? HTTPURLResponse else { throw QuillError("Your site returned a non-HTTP response.") }
+        guard response.expectedContentLength <= Int64(limit) else { bytes.task.cancel(); throw QuillError("This page is too large.") }
+        var data = Data()
+        for try await byte in bytes {
+            data.append(byte)
+            if data.count >= limit { bytes.task.cancel(); break }
+        }
+        return (data, response)
+    }
     public static func check(_ response: HTTPURLResponse) throws {
         guard (200..<300).contains(response.statusCode) else {
             throw QuillError("Your site returned HTTP \(response.statusCode). \([401,403].contains(response.statusCode) ? "Check your sign-in and granted permissions." : "Your draft is safe. Check the site before retrying.")", status: response.statusCode)

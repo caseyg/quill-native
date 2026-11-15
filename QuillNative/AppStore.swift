@@ -104,7 +104,7 @@ final class AppStore {
         syncProgress = SyncProgress(count: 0, fraction: oldest == nil ? nil : 0)
         do {
             let result = try await LibrarySync.fetch(client: client, me: account.me) { [weak self] page in
-                await self?.received(page, oldest: oldest, filling: filling)
+                await self?.received(page, oldest: oldest, filling: filling, for: account)
             }
             guard self.account == account else { return }
             // A sync that began before a post was sent may not include it yet.
@@ -126,8 +126,9 @@ final class AppStore {
     var syncProgress: SyncProgress?
 
     /// Shows each page as it arrives. A first sync lists posts right away instead of after the last page.
-    private func received(_ page: [Post], oldest: Date?, filling: Bool) {
-        guard var progress = syncProgress else { return }
+    private func received(_ page: [Post], oldest: Date?, filling: Bool, for account: Account) {
+        // A sync still running after signing out or into another site must not touch this list.
+        guard self.account == account, var progress = syncProgress else { return }
         progress.count += page.count
         if let oldest, let reached = page.compactMap(\.published).min() {
             let span = Date().timeIntervalSince(oldest)
@@ -156,8 +157,10 @@ final class AppStore {
         defer { describing.remove(post.id) }
         var request = URLRequest(url: url); request.timeoutInterval = 15
         let summary: (author: String, text: String)
-        if let (data, response) = try? await Network.send(request), (200..<300).contains(response.statusCode) {
-            summary = PageSummary.parse(html: String(decoding: data.prefix(2_000_000), as: UTF8.self))
+        // Only HTML is read, and only the first 2 MB, since the page is untrusted.
+        if let (data, response) = try? await Network.send(request, limit: 2_000_000), (200..<300).contains(response.statusCode),
+           (response.value(forHTTPHeaderField: "Content-Type") ?? "text/html").lowercased().contains("html") {
+            summary = PageSummary.parse(html: String(decoding: data, as: UTF8.self))
         } else if Task.isCancelled {
             return // Scrolled away; try again when the row returns.
         } else {
