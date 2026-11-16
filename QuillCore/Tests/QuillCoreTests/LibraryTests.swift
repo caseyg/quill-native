@@ -23,6 +23,38 @@ final class LibraryTests: XCTestCase {
         XCTAssertEqual(result.posts[1].kind, .note)
     }
 
+    func testRefreshStopsAtPostsAlreadyOnDevice() async throws {
+        let endpoint = URL(string: "https://example.com/micropub")!
+        let pages = Counter()
+        let client = MicropubClient(endpoint: endpoint, token: "t", transport: { req in
+            pages.add()
+            let after = URLComponents(url: req.url!, resolvingAgainstBaseURL: false)!.queryItems!.first { $0.name == "after" }?.value
+            let n = Int(after ?? "0")!
+            return self.ok(req.url!, #"{"items":[{"type":["h-entry"],"properties":{"url":["https://example.com/\#(n)"],"content":["Post \#(n)"]}}],"paging":{"after":"\#(n + 1)"}}"#)
+        })
+        let result = try await LibrarySync.fetch(client: client, me: URL(string: "https://example.com/")!, known: ["https://example.com/2"])
+        XCTAssertEqual(result.posts.map(\.url.absoluteString), ["https://example.com/0", "https://example.com/1", "https://example.com/2"])
+        XCTAssertTrue(result.finished)
+        XCTAssertEqual(pages.value, 3)
+    }
+
+    func testRefreshKeepsOlderPostsAndCompletion() {
+        var library = Library()
+        let old = Post(url: URL(string: "https://example.com/old")!, kind: .note)
+        library.replace(with: [old], source: .micropub, complete: false)
+        XCTAssertFalse(library.isComplete)
+        var new = Post(url: URL(string: "https://example.com/new")!, kind: .note); new.published = Date()
+        library.replace(with: [new], source: .micropub, keeping: true)
+        XCTAssertEqual(library.posts.map(\.url.lastPathComponent), ["new", "old"])
+        XCTAssertTrue(library.isComplete)
+    }
+
+    func testLibrariesSavedBeforeCompletionWasKeptCountAsComplete() throws {
+        let library = try JSONDecoder().decode(Library.self, from: Data(#"{"posts":[],"synced":0}"#.utf8))
+        XCTAssertTrue(library.isComplete)
+        XCTAssertFalse(Library().isComplete)
+    }
+
     func testFallsBackToJSONFeedWhenListingIsUnsupported() async throws {
         let endpoint = URL(string: "https://example.com/micropub")!
         let client = MicropubClient(endpoint: endpoint, token: "t", transport: { req in self.ok(req.url!, #"{"error":"invalid_request"}"#, status: 400) })
@@ -210,4 +242,11 @@ final class CiteTests: XCTestCase {
         library.replace(with: [post], source: .micropub)
         XCTAssertEqual(library.posts[0].citeText, "Hi")
     }
+}
+
+final class Counter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var count = 0
+    func add() { lock.lock(); count += 1; lock.unlock() }
+    var value: Int { lock.lock(); defer { lock.unlock() }; return count }
 }
