@@ -141,7 +141,9 @@ public struct MicropubClient {
             } else {
                 var form = Multipart()
                 for (name, value) in pairs { form.field(name, value) }
-                for (i, attachment) in pending.enumerated() { form.file("photo[\(i)]", attachment); if !attachment.alt.isEmpty { form.field("photo-alt[\(i)]", attachment.alt) } }
+                let photos = pending.filter { !$0.isAudio }, audio = pending.filter(\.isAudio)
+                for (i, attachment) in photos.enumerated() { form.file("photo[\(i)]", attachment); if !attachment.alt.isEmpty { form.field("photo-alt[\(i)]", attachment.alt) } }
+                for (i, attachment) in audio.enumerated() { form.file("audio[\(i)]", attachment) }
                 form.finish(); req.httpBody = form.data; req.setValue("multipart/form-data; boundary=" + form.boundary, forHTTPHeaderField:"Content-Type")
             }
         } else {

@@ -9,7 +9,7 @@ public enum Payload {
         func require(_ value: String, _ message: String) throws { if value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { throw QuillError(message) } }
         switch d.kind {
         case .note: try require(d.content, "Write something before publishing.")
-        case .photo: if d.attachments.isEmpty && (d.fields["photo-url"] ?? "").isEmpty { throw QuillError("Add a photo first.") }
+        case .photo: if !d.attachments.contains(where: { !$0.isAudio }) && (d.fields["photo-url"] ?? "").isEmpty { throw QuillError("Add a photo first.") }
         case .reply, .bookmark, .like, .repost: _ = try WebURL.parse(d.target)
         case .article: if d.attachments.isEmpty && (d.fields["photo-url"] ?? "").isEmpty { try require(d.content, "Add content before publishing.") }
         case .code: try require(d.content, "Add content before publishing.")
@@ -82,8 +82,10 @@ public enum Payload {
             p["workout"] = .array([nested("h-workout", workout)])
         default: break
         }
+        let audio = d.attachments.filter(\.isAudio).compactMap { $0.remoteURL?.absoluteString }
+        if !audio.isEmpty { p["audio"] = strings(audio) }
         var photos: [JSONValue] = d.attachments.compactMap { attachment in
-            guard let url = attachment.remoteURL else { return nil }
+            guard !attachment.isAudio, let url = attachment.remoteURL else { return nil }
             return attachment.alt.isEmpty ? .string(url.absoluteString) : .object(["value": .string(url.absoluteString), "alt": .string(attachment.alt)])
         }
         if let external = d.fields["photo-url"], !external.isEmpty { _ = try WebURL.parse(external); photos.append(.string(external)) }
@@ -92,7 +94,7 @@ public enum Payload {
     }
     public static func articleMarkdown(_ draft: Draft) -> String {
         func escape(_ value: String) -> String { value.replacingOccurrences(of: "]", with: "\\]").replacingOccurrences(of: "\n", with: " ") }
-        var images = draft.attachments.map { attachment in
+        var images = draft.attachments.filter { !$0.isAudio }.map { attachment in
             "![\(escape(attachment.alt))](\(attachment.remoteURL?.absoluteString ?? "data:\(attachment.mimeType);base64,\(attachment.data.base64EncodedString())"))"
         }
         if let external = draft.fields["photo-url"], (try? WebURL.parse(external)) != nil { images.append("![](\(external))") }
@@ -101,7 +103,7 @@ public enum Payload {
     public static func articleHTML(_ draft: Draft) -> String {
         func escape(_ value: String) -> String { value.replacingOccurrences(of:"&",with:"&amp;").replacingOccurrences(of:"<",with:"&lt;").replacingOccurrences(of:">",with:"&gt;").replacingOccurrences(of:"\"",with:"&quot;") }
         var html = draft.content.replacingOccurrences(of:#"<img\b[^>]*quill-attachment:[^>]*>"#,with:"",options:[.regularExpression,.caseInsensitive])
-        var images = draft.attachments.map { attachment -> String in
+        var images = draft.attachments.filter { !$0.isAudio }.map { attachment -> String in
             let src = attachment.remoteURL?.absoluteString ?? "data:\(attachment.mimeType);base64,\(attachment.data.base64EncodedString())"
             return "<figure><img src=\"\(escape(src))\" alt=\"\(escape(attachment.alt))\"></figure>"
         }.joined()

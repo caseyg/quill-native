@@ -20,6 +20,7 @@ struct ComposerView: View {
     @State private var showDetails = false
     @State private var showCamera = false
     @State private var showPhotos = false
+    @State private var recordingVoice = false
     @State private var htmlSource = false
     @State private var describing: Attachment.ID?
     @State private var descriptionText = ""
@@ -57,6 +58,10 @@ struct ComposerView: View {
                 }
             }
             .interactiveDismissDisabled(sending)
+            .sheet(isPresented: $recordingVoice) {
+                VoiceNoteSheet { text, audio in insertVoiceNote(text, audio: audio) }
+                    .presentationDetents([.height(340)])
+            }
             .photosPicker(isPresented: $showPhotos, selection: $picked, maxSelectionCount: 10, matching: .images)
             .fullScreenCover(isPresented: $showCamera) {
                 CameraPicker { data in
@@ -98,6 +103,7 @@ struct ComposerView: View {
             .onAppear {
                 guard !appeared else { return }
                 appeared = true
+                if store.startsVoiceNote { store.startsVoiceNote = false; recordingVoice = true }
                 // A post just fetched for editing is only kept as a draft once it changes.
                 saved = store.drafts.first { $0.id == draft.id } ?? (draft.editURL != nil ? draft : nil)
                 // Existing HTML opens as source, so formatting the editor can't show is kept.
@@ -249,11 +255,15 @@ struct ComposerView: View {
             ScrollView(.horizontal) {
                 HStack(spacing: 10) {
                     ForEach(draft.attachments) { attachment in
+                        if attachment.isAudio {
+                            AudioTile { withAnimation(.snappy) { draft.attachments.removeAll { $0.id == attachment.id } } }
+                        } else {
                         PhotoThumbnail(attachment: attachment) {
                             descriptionText = attachment.alt
                             describing = attachment.id
                         } remove: {
                             withAnimation(.snappy) { draft.attachments.removeAll { $0.id == attachment.id } }
+                        }
                         }
                     }
                     if importing { ProgressView().frame(width: 96, height: 96) }
@@ -320,6 +330,10 @@ struct ComposerView: View {
                 barButton("Italic", "italic") { rich.italic() }
                 barButton("Heading", "textformat.size") { rich.heading() }
                 barButton("Link", "link") { linkText = ""; addingLink = true }
+            }
+            if draft.kind.takesVoice {
+                barButton("Voice Note", "mic") { focus = nil; recordingVoice = true }
+                    .accessibilityIdentifier("voice")
             }
             if draft.kind.takesPhotos && draft.editURL == nil {
                 barButton("Photo Library", "photo.on.rectangle") { showPhotos = true }
@@ -428,6 +442,23 @@ struct ComposerView: View {
         }
     }
 
+    /// Adds a transcript after what is already written, as a paragraph of its own.
+    private func insertVoiceNote(_ text: String, audio: Attachment?) {
+        withAnimation(.snappy) {
+            if !text.isEmpty {
+                if draft.isHTML {
+                    let escaped = text.replacingOccurrences(of: "&", with: "&amp;").replacingOccurrences(of: "<", with: "&lt;").replacingOccurrences(of: ">", with: "&gt;")
+                    draft.content += "<p>\(escaped)</p>"
+                } else {
+                    let current = draft.content.trimmingCharacters(in: .whitespacesAndNewlines)
+                    draft.content = current.isEmpty ? text : current + "\n\n" + text
+                }
+            }
+            if let audio, draft.editURL == nil { draft.attachments.append(audio) }
+        }
+        focus = .content
+    }
+
     private func attach(_ data: Data, name: String) {
         let attachment = Attachment(data: data, filename: "\(name)-\(UUID().uuidString.prefix(8)).jpg", mimeType: "image/jpeg")
         withAnimation(.snappy) { draft.attachments.append(attachment) }
@@ -528,6 +559,7 @@ extension PostKind {
     var hasTarget: Bool { [.reply, .bookmark, .like, .repost].contains(self) }
     var hasText: Bool { [.note, .photo, .reply, .bookmark].contains(self) }
     var takesPhotos: Bool { [.note, .photo, .reply, .article].contains(self) }
+    var takesVoice: Bool { [.note, .photo, .reply, .bookmark, .article].contains(self) }
     var takesLocation: Bool { ![.like, .repost, .weight, .exercise, .itinerary].contains(self) }
     var prompt: String {
         switch self {
