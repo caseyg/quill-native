@@ -130,8 +130,43 @@ final class MarkdownTests: XCTestCase {
     func testOldPreferencesStillLoad() throws {
         let prefs = try JSONDecoder().decode(Preferences.self, from: Data(#"{"weightUnit":"kg"}"#.utf8))
         XCTAssertEqual(prefs.weightUnit, "kg")
-        XCTAssertFalse(prefs.markdown)
+        XCTAssertEqual(prefs.format, .plain)
         XCTAssertEqual(prefs.visibleKinds.count, PostKind.allCases.count)
+    }
+    func testOldMarkdownSwitchBecomesTheDefaultFormat() throws {
+        let prefs = try JSONDecoder().decode(Preferences.self, from: Data(#"{"markdown":true}"#.utf8))
+        XCTAssertEqual(prefs.format, .markdown)
+        XCTAssertEqual(prefs.format(for: .note), .markdown)
+        XCTAssertEqual(prefs.format(for: .review), .plain)
+        XCTAssertNil(prefs.format(for: .like))
+    }
+    func testFormatOverridesRoundTrip() throws {
+        var prefs = Preferences(); prefs.format = .markdown; prefs.formatOverrides[.article] = .html
+        let again = try JSONDecoder().decode(Preferences.self, from: JSONEncoder().encode(prefs))
+        XCTAssertEqual(again, prefs)
+        XCTAssertEqual(again.format(for: .article), .html)
+        XCTAssertEqual(again.format(for: .note), .markdown)
+    }
+    func testPlainDefaultKeepsArticlesRich() {
+        var draft = Draft(kind: .note)
+        draft.prepare(for: .article, preferences: Preferences())
+        XCTAssertTrue(draft.isHTML)
+        draft.prepare(for: .note, preferences: Preferences())
+        XCTAssertEqual(draft.format, .plain)
+    }
+    func testDraftFormatSetsMarkers() {
+        var draft = Draft(kind: .note)
+        draft.format = .markdown
+        XCTAssertEqual(draft.fields["p3k-content-type"], "text/markdown"); XCTAssertFalse(draft.isHTML)
+        draft.format = .html
+        XCTAssertNil(draft.fields["p3k-content-type"]); XCTAssertTrue(draft.isHTML)
+        draft.format = .plain
+        XCTAssertEqual(draft.format, .plain)
+    }
+    func testHTMLNoteSendsHTMLContent() throws {
+        var draft = Draft(kind: .note); draft.content = "<p>Hi</p>"; draft.format = .html
+        let p = try Payload.create(draft).object?["properties"]?.object
+        XCTAssertEqual(p?["content"], .array([.object(["html": .string("<p>Hi</p>")])]))
     }
     func testMarkdownTextForRows() {
         XCTAssertEqual(Markdown.text("Happy bday to [@shannon](https://bsky.app/x) **today**"), "Happy bday to @shannon today")

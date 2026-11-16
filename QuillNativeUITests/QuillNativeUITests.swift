@@ -126,6 +126,20 @@ final class QuillNativeUITests: XCTestCase {
     }
 
     /// Opens Settings, flips a switch and returns to the list.
+    /// Picks the default format in Settings.
+    private func format(_ name: String, in app: XCUIApplication) {
+        XCTAssertTrue(app.buttons["settings"].waitForExistence(timeout: 5))
+        app.buttons["settings"].tap()
+        let picker = app.buttons["settings.format"]
+        XCTAssertTrue(picker.waitForExistence(timeout: 5))
+        picker.tap()
+        let option = app.buttons[name].firstMatch
+        XCTAssertTrue(option.waitForExistence(timeout: 5))
+        option.tap()
+        XCTAssertTrue(app.buttons["Done"].waitForExistence(timeout: 5))
+        app.buttons["Done"].tap()
+    }
+
     private func setting(_ name: String, in app: XCUIApplication, postType: Bool = false, on: Bool) {
         XCTAssertTrue(app.buttons["settings"].waitForExistence(timeout: 5))
         app.buttons["settings"].tap()
@@ -193,8 +207,8 @@ final class QuillNativeUITests: XCTestCase {
     func testMarkdownSettingMarksPosts() throws {
         let text = "Markdown *check* \(Int(Date().timeIntervalSince1970))"
         let app = launch()
-        setting("Markdown", in: app, on: true)
-        defer { app.terminate(); let again = launch(); setting("Markdown", in: again, on: false) }
+        format("Markdown", in: app)
+        defer { app.terminate(); let again = launch(); format("Plain Text", in: again) }
         app.buttons["compose"].tap()
         let field = content(in: app)
         XCTAssertTrue(field.waitForExistence(timeout: 5))

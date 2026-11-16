@@ -361,7 +361,7 @@ struct ComposerView: View {
     // MARK: State
 
     private var kind: Binding<PostKind> {
-        Binding(get: { draft.kind }, set: { new in withAnimation(.snappy) { draft.prepare(for: new, markdown: store.preferences.markdown) } })
+        Binding(get: { draft.kind }, set: { new in withAnimation(.snappy) { draft.prepare(for: new, preferences: store.preferences) } })
     }
 
     private var sendTitle: String {

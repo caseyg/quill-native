@@ -45,10 +45,6 @@ struct StructuredFields: View {
         }
         Section {
             TextField("Description", text: $draft.content, axis: .vertical).lineLimit(3...)
-            Picker("Format", selection: field("p3k-content-type")) {
-                Text("Plain Text").tag("")
-                Text("Markdown").tag("text/markdown")
-            }
         }
         Section {
             DisclosureGroup("Place") {
@@ -79,7 +75,6 @@ struct StructuredFields: View {
         Section {
             TextField("Summary", text: field("summary"))
             TextField("Review", text: $draft.content, axis: .vertical).lineLimit(4...)
-            Toggle("HTML", isOn: $draft.isHTML)
         }
     }
 
