@@ -232,7 +232,7 @@ final class AppStore {
 
     func compose(_ kind: PostKind) {
         var draft = Draft(kind: kind); draft.accountURL = account?.me
-        draft.prepare(for: kind, markdown: preferences.markdown)
+        draft.prepare(for: kind, preferences: preferences)
         composerSource = AppStore.composeSource
         composer = draft
     }
@@ -303,18 +303,6 @@ final class AppStore {
         composer?.published = values["published"] ?? ""
         composer?.content = values["text"] ?? ""
         composer?.target = values["reply"] ?? values["url"] ?? ""
-    }
-}
-
-extension Draft {
-    /// Fills in what a post type needs before it can be edited.
-    mutating func prepare(for kind: PostKind, markdown: Bool = false) {
-        self.kind = kind
-        if kind == .itinerary && legs.isEmpty { legs = [Leg()] }
-        if kind == .review && (fields["rating"] ?? "").isEmpty { fields["rating"] = "5" }
-        isHTML = kind == .article && !markdown
-        if markdown && (Preferences.markdownKinds.contains(kind) || kind == .event) { fields["p3k-content-type"] = "text/markdown" }
-        else if fields["p3k-content-type"] == "text/markdown" && !markdown { fields["p3k-content-type"] = nil }
     }
 }
 

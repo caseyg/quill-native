@@ -71,6 +71,7 @@ final class ShareModel {
         if let url { texts.removeAll { $0 == url.absoluteString } }
 
         var draft = Draft(kind: url != nil ? .bookmark : (images.isEmpty ? .note : .photo))
+        draft.prepare(for: draft.kind, preferences: preferences)
         draft.accountURL = account?.me
         draft.target = url?.absoluteString ?? ""
         if url != nil, let first = texts.first, texts.count > 1 || !first.contains("\n") {

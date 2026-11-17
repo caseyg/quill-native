@@ -98,6 +98,12 @@ struct ComposerDetails: View {
                 }
             }
             Section {
+                if ContentFormat.supported(by: draft.kind).count > 1 {
+                    Picker("Format", selection: $draft.format) {
+                        ForEach(ContentFormat.supported(by: draft.kind)) { Text($0.title).tag($0) }
+                    }
+                    .accessibilityIdentifier("details.format")
+                }
                 if draft.kind == .article && draft.isHTML { Toggle("Edit as HTML", isOn: $htmlSource) }
                 NavigationLink("Request") { RequestView(draft: draft, preferences: store.preferences) }
                     .accessibilityIdentifier("details.request")

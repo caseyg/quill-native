@@ -12,24 +12,21 @@ struct SettingsView: View {
             if let account = store.account {
                 Section {
                     LabeledContent("Site", value: account.me.host ?? account.me.absoluteString)
-                    LabeledContent("Micropub", value: account.micropub.absoluteString)
-                    if let media = store.config.mediaEndpoint { LabeledContent("Media", value: media.absoluteString) }
-                    if !account.scope.isEmpty { LabeledContent("Permissions", value: account.scope) }
-                    if !store.config.targets.isEmpty {
-                        LabeledContent("Syndication", value: store.config.targets.map(\.name).joined(separator: ", "))
-                    }
+                        .textSelection(.enabled)
                 }
-                .textSelection(.enabled)
             }
             Section {
                 NavigationLink("Post Types") { PostTypesView() }
-                Toggle("Markdown", isOn: $store.preferences.markdown)
+                Picker("Format", selection: $store.preferences.format) {
+                    ForEach(ContentFormat.allCases) { Text($0.title).tag($0) }
+                }
+                .accessibilityIdentifier("settings.format")
                 Picker("Weight Unit", selection: $store.preferences.weightUnit) {
                     Text("Pounds").tag("lb")
                     Text("Kilograms").tag("kg")
                     Text("Stone").tag("st")
                 }
-                NavigationLink("Compatibility") { CompatibilityView() }
+                NavigationLink("Advanced") { AdvancedView() }
             }
             Section {
                 Link("Source Code", destination: URL(string: "https://github.com/caseyg/quill-native")!)
@@ -85,29 +82,56 @@ private struct PostTypesView: View {
     }
 }
 
-/// Switches for servers that expect older Micropub conventions.
-private struct CompatibilityView: View {
+/// Settings most people never change: server details, per-type formats and protocol switches.
+private struct AdvancedView: View {
     @Environment(AppStore.self) private var store
     @State private var formEncoded = SharedStorage.defaults.bool(forKey: "formEncoded")
 
     var body: some View {
         @Bindable var store = store
         Form {
-            Toggle("HTML Content Object", isOn: $store.preferences.htmlContent)
-            Toggle("Form Encoding", isOn: $formEncoded)
-                .onChange(of: formEncoded) { _, value in SharedStorage.defaults.set(value, forKey: "formEncoded") }
-            LabeledContent("Slug Field") {
-                TextField("mp-slug", text: $store.preferences.slugField)
-                    .multilineTextAlignment(.trailing)
-                    .autocorrectionDisabled()
-                    .textInputAutocapitalization(.never)
+            if let account = store.account {
+                Section("Server") {
+                    LabeledContent("Micropub", value: account.micropub.absoluteString)
+                    if let media = store.config.mediaEndpoint { LabeledContent("Media", value: media.absoluteString) }
+                    if !account.scope.isEmpty { LabeledContent("Permissions", value: account.scope) }
+                    if !store.config.targets.isEmpty {
+                        LabeledContent("Syndication", value: store.config.targets.map(\.name).joined(separator: ", "))
+                    }
+                }
+                .textSelection(.enabled)
             }
-            Picker("Syndication Field", selection: $store.preferences.syndicationField) {
-                Text("mp-syndicate-to").tag("mp-syndicate-to")
-                Text("syndicate-to").tag("syndicate-to")
+            Section("Format by Post Type") {
+                ForEach(PostKind.allCases.filter { ContentFormat.supported(by: $0).count > 1 }) { kind in
+                    Picker(selection: override(kind)) {
+                        Text("Default").tag(ContentFormat?.none)
+                        ForEach(ContentFormat.supported(by: kind)) { Text($0.title).tag(Optional($0)) }
+                    } label: {
+                        Label(kind.title, systemImage: kind.symbol)
+                    }
+                }
+            }
+            Section("Compatibility") {
+                Toggle("HTML Content Object", isOn: $store.preferences.htmlContent)
+                Toggle("Form Encoding", isOn: $formEncoded)
+                    .onChange(of: formEncoded) { _, value in SharedStorage.defaults.set(value, forKey: "formEncoded") }
+                LabeledContent("Slug Field") {
+                    TextField("mp-slug", text: $store.preferences.slugField)
+                        .multilineTextAlignment(.trailing)
+                        .autocorrectionDisabled()
+                        .textInputAutocapitalization(.never)
+                }
+                Picker("Syndication Field", selection: $store.preferences.syndicationField) {
+                    Text("mp-syndicate-to").tag("mp-syndicate-to")
+                    Text("syndicate-to").tag("syndicate-to")
+                }
             }
         }
-        .navigationTitle("Compatibility")
+        .navigationTitle("Advanced")
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func override(_ kind: PostKind) -> Binding<ContentFormat?> {
+        Binding(get: { store.preferences.formatOverrides[kind] }, set: { store.preferences.formatOverrides[kind] = $0 })
     }
 }
