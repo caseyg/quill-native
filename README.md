@@ -6,7 +6,9 @@ A Micropub client for iPhone and iPad. Sign in with your own website and post to
 
 | | | | |
 |---|---|---|---|
-| <img src="docs/screenshots/home-light.png" alt="Posts list with drafts and a posted note" width="200"> | <img src="docs/screenshots/composer-light.png" alt="Note composer with the keyboard up" width="200"> | <img src="docs/screenshots/home-dark.png" alt="Posts list in dark mode" width="200"> | <img src="docs/screenshots/sign-in-light.png" alt="Sign-in screen" width="200"> |
+| <img src="docs/screenshots/home-library.png" alt="Home list with drafts and synced posts" width="200"> | <img src="docs/screenshots/composer-note.png" alt="Note composer with the keyboard up" width="200"> | <img src="docs/screenshots/home-dark.png" alt="Home list in dark mode" width="200"> | <img src="docs/screenshots/share-sheet.png" alt="Share extension editor over Safari" width="200"> |
+
+More on the [website](https://caseyg.github.io/quill-native/).
 
 ## Use
 

@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How Quill fits the IndieWeb</title>
+<meta name="description" content="A short, visual guide to the IndieWeb and the open standards Quill uses: Micropub, IndieAuth, Microformats and Webmention.">
+<link rel="icon" href="../assets/favicon.png" type="image/png">
+<link rel="apple-touch-icon" href="../assets/apple-touch-icon.png">
+<meta name="theme-color" content="#fbf8f4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#141016" media="(prefers-color-scheme: dark)">
+<link rel="stylesheet" href="../assets/site.css">
+<style>
+  .mk-accent { fill: var(--plum); }
+  .mk-peach { fill: #c98f66; }
+  .mk-line { fill: var(--ink-3); }
+  @media (prefers-color-scheme: dark) { .mk-peach { fill: var(--peach); } }
+  .chip { fill: var(--card); stroke: var(--line); }
+  .chip-text { fill: var(--ink-2); font: 500 12.5px var(--sans); }
+  .svg-title { fill: var(--ink); font: 600 22px var(--serif); }
+</style>
+</head>
+<body>
+<header class="nav" id="nav">
+  <div class="wrap">
+    <a class="brand" href="../"><img src="../assets/icon-256.png" alt="">Quill</a>
+    <ul>
+      <li class="optional"><a href="../#features">Features</a></li>
+      <li><a href="./" aria-current="page">IndieWeb</a></li>
+      <li><a href="https://github.com/caseyg/quill-native">GitHub</a></li>
+    </ul>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="doc-hero">
+    <p class="eyebrow">The IndieWeb</p>
+    <h1 style="font-size:clamp(40px,6vw,68px)">Your website is the hub.</h1>
+    <p class="lede">The <a href="https://indieweb.org/">IndieWeb</a> is people publishing on sites they own, instead of on platforms that own their posts. A handful of small, open standards let those sites talk to each other and to apps like Quill. Here’s how the pieces fit.</p>
+  </div>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 1000 545" role="img" aria-labelledby="dia-title dia-desc">
+      <title id="dia-title">How the IndieWeb standards connect</title>
+      <desc id="dia-desc">Apps like Quill sign in to your website with IndieAuth and post to it with Micropub. Your site marks up posts with Microformats, sends and receives Webmentions with other sites, publishes a feed for readers, and can copy posts out to social networks (POSSE).</desc>
+      <defs>
+        <marker id="m-accent" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk-accent" d="M0 0 10 5 0 10z"/></marker>
+        <marker id="m-peach" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk-peach" d="M0 0 10 5 0 10z"/></marker>
+        <marker id="m-line" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk-line" d="M0 0 10 5 0 10z"/></marker>
+      </defs>
+
+      <!-- Apps -->
+      <rect class="svg-box" x="2" y="160" width="218" height="210" rx="24"/>
+      <text class="svg-label" x="111" y="202" text-anchor="middle">Apps</text>
+      <text class="svg-sub" x="111" y="223" text-anchor="middle">that write to your site</text>
+      <rect class="chip" x="26" y="244" width="170" height="30" rx="15"/><text class="chip-text" x="111" y="264" text-anchor="middle">Quill for iOS</text>
+      <rect class="chip" x="26" y="282" width="170" height="30" rx="15"/><text class="chip-text" x="111" y="302" text-anchor="middle">Quill on the web</text>
+      <rect class="chip" x="26" y="320" width="170" height="30" rx="15"/><text class="chip-text" x="111" y="340" text-anchor="middle">Other Micropub clients</text>
+
+      <!-- Your site -->
+      <rect class="svg-you" x="380" y="140" width="260" height="250" rx="30" stroke-width="2"/>
+      <text class="svg-title" x="510" y="190" text-anchor="middle">Your website</text>
+      <text class="svg-sub" x="510" y="212" text-anchor="middle">yoursite.com</text>
+      <rect class="chip" x="405" y="238" width="210" height="32" rx="16"/><text class="chip-text" x="510" y="259" text-anchor="middle">Microformats markup</text>
+      <rect class="chip" x="405" y="280" width="210" height="32" rx="16"/><text class="chip-text" x="510" y="301" text-anchor="middle">Micropub endpoint</text>
+      <rect class="chip" x="405" y="322" width="210" height="32" rx="16"/><text class="chip-text" x="510" y="343" text-anchor="middle">IndieAuth endpoints</text>
+
+      <!-- Other sites -->
+      <rect class="svg-box" x="800" y="36" width="198" height="130" rx="24"/>
+      <text class="svg-label" x="899" y="90" text-anchor="middle">Other people’s sites</text>
+      <text class="svg-sub" x="899" y="112" text-anchor="middle">posts you reply to,</text>
+      <text class="svg-sub" x="899" y="130" text-anchor="middle">like and mention</text>
+
+      <!-- Readers -->
+      <rect class="svg-box" x="800" y="364" width="198" height="130" rx="24"/>
+      <text class="svg-label" x="899" y="418" text-anchor="middle">Readers</text>
+      <text class="svg-sub" x="899" y="440" text-anchor="middle">feed readers and</text>
+      <text class="svg-sub" x="899" y="458" text-anchor="middle">social readers</text>
+
+      <!-- Social networks -->
+      <rect class="svg-box" x="405" y="476" width="210" height="64" rx="20"/>
+      <text class="svg-label" x="510" y="504" text-anchor="middle">Social networks</text>
+      <text class="svg-sub" x="510" y="524" text-anchor="middle">copies that link home</text>
+
+      <!-- Micropub: app to site -->
+      <path class="svg-accent" d="M226 236 H 372" marker-end="url(#m-accent)"/>
+      <rect class="svg-pill" x="252" y="223" width="96" height="26" rx="13"/>
+      <text class="svg-tag svg-pill-text" x="300" y="240" text-anchor="middle">Micropub</text>
+      <text class="svg-sub" x="300" y="270" text-anchor="middle">post, edit, delete</text>
+
+      <!-- IndieAuth: both ways -->
+      <path class="svg-line" d="M230 316 H 372" stroke-dasharray="5 5" marker-start="url(#m-line)" marker-end="url(#m-line)"/>
+      <rect class="svg-pill" x="252" y="303" width="96" height="26" rx="13"/>
+      <text class="svg-tag svg-pill-text" x="300" y="320" text-anchor="middle">IndieAuth</text>
+      <text class="svg-sub" x="300" y="350" text-anchor="middle">sign in, get a token</text>
+
+      <!-- Webmention: both ways -->
+      <path class="svg-peach" d="M648 196 L 792 110" marker-start="url(#m-peach)" marker-end="url(#m-peach)"/>
+      <rect class="svg-pill" x="665" y="140" width="110" height="26" rx="13"/>
+      <text class="svg-tag svg-pill-peach" x="720" y="157" text-anchor="middle">Webmention</text>
+
+      <!-- Feeds -->
+      <path class="svg-line" d="M648 336 L 792 424" marker-end="url(#m-line)"/>
+      <rect class="svg-pill" x="658" y="367" width="124" height="26" rx="13"/>
+      <text class="svg-tag svg-pill-text" x="720" y="384" text-anchor="middle">h-feed · WebSub</text>
+
+      <!-- POSSE -->
+      <path class="svg-line" d="M510 392 V 468" marker-end="url(#m-line)"/>
+      <rect class="svg-pill" x="475" y="417" width="70" height="26" rx="13"/>
+      <text class="svg-tag svg-pill-text" x="510" y="434" text-anchor="middle">POSSE</text>
+    </svg>
+    <figcaption>Quill handles the left side. Your site, or the software it runs, handles the rest.</figcaption>
+  </figure>
+
+  <section class="doc-section doc" id="flow">
+    <p class="eyebrow">Step by step</p>
+    <h2>What happens when you post from Quill</h2>
+    <ol class="steps">
+      <li>
+        <h3>You type your domain <span class="spec">Discovery</span></h3>
+        <p>Quill reads your homepage for links that say where your site signs people in and where it accepts posts. No account with Quill, and no settings to copy.</p>
+      </li>
+      <li>
+        <h3>Your site signs you in <span class="spec">IndieAuth</span></h3>
+        <p>Quill opens your site’s sign-in page in the system browser. You approve, and your site hands Quill a token that can post for you. The token stays in your Keychain.</p>
+      </li>
+      <li>
+        <h3>Quill sends the post <span class="spec">Micropub</span></h3>
+        <p>When you tap Post, Quill sends your words, photos and details to your site’s Micropub endpoint. Your site answers with the new post’s address.</p>
+      </li>
+      <li>
+        <h3>Your site publishes it <span class="spec">Microformats</span></h3>
+        <p>Your site puts the post on a page, marked up with a few class names like <code>h-entry</code> and <code>p-name</code> so other sites and readers can understand it.</p>
+      </li>
+      <li>
+        <h3>Your site lets others know <span class="spec">Webmention</span></h3>
+        <p>If you replied to, liked or linked to someone’s post, your site pings theirs. Their replies and likes come back the same way and can show up under your post.</p>
+      </li>
+      <li>
+        <h3>Copies go out, if you want <span class="spec">POSSE</span></h3>
+        <p>Your site can syndicate a copy to social networks, linking back to the original. Pick the targets per post in Quill’s Details.</p>
+      </li>
+    </ol>
+  </section>
+
+  <section class="doc-section doc" id="under-the-hood">
+    <p class="eyebrow">Under the hood</p>
+    <h2>It’s just HTML and HTTP</h2>
+    <p>Everything Quill needs is in two places: a few links in your homepage, and one request to your site.</p>
+    <div class="code-pair">
+      <div class="code">
+        <header>Your homepage’s &lt;head&gt;</header>
+<pre><span class="k">&lt;link</span> rel=<span class="s">"indieauth-metadata"</span>
+  href=<span class="s">"https://yoursite.com/auth/meta"</span><span class="k">&gt;</span>
+<span class="k">&lt;link</span> rel=<span class="s">"micropub"</span>
+  href=<span class="s">"https://yoursite.com/micropub"</span><span class="k">&gt;</span></pre>
+      </div>
+      <div class="code">
+        <header>What Quill sends</header>
+<pre><span class="k">POST</span> /micropub
+Authorization: Bearer <span class="s">…</span>
+
+h=<span class="s">entry</span>&amp;content=<span class="s">Planted+the+tomatoes</span>
+&amp;category[]=<span class="s">garden</span></pre>
+      </div>
+      <div class="code" style="grid-column:1/-1">
+        <header>What your site publishes</header>
+<pre><span class="k">&lt;article</span> class=<span class="s">"h-entry"</span><span class="k">&gt;</span>
+  <span class="k">&lt;p</span> class=<span class="s">"e-content"</span><span class="k">&gt;</span>Planted the tomatoes<span class="k">&lt;/p&gt;</span>
+  <span class="k">&lt;a</span> class=<span class="s">"u-url"</span> href=<span class="s">"/2026/11/17/tomatoes"</span><span class="k">&gt;</span><span class="k">&lt;time</span> class=<span class="s">"dt-published"</span><span class="k">&gt;</span>Nov 17<span class="k">&lt;/time&gt;&lt;/a&gt;</span>
+<span class="k">&lt;/article&gt;</span></pre>
+      </div>
+    </div>
+  </section>
+
+  <section class="doc-section" id="specs">
+    <p class="eyebrow">The standards</p>
+    <h2>The specs, in a sentence each</h2>
+    <div class="specs">
+      <a class="spec-card" href="https://micropub.spec.indieweb.org/">
+        <span class="kind">W3C Recommendation</span>
+        <h3>Micropub</h3>
+        <p>An API for creating, editing and deleting posts on any site. What Quill speaks.</p>
+        <span class="links">micropub.spec.indieweb.org</span>
+      </a>
+      <a class="spec-card" href="https://indieauth.spec.indieweb.org/">
+        <span class="kind">Living standard</span>
+        <h3>IndieAuth</h3>
+        <p>Sign in with your domain. Built on OAuth 2.0, with your site as the identity.</p>
+        <span class="links">indieauth.spec.indieweb.org</span>
+      </a>
+      <a class="spec-card" href="https://microformats.org/wiki/microformats2">
+        <span class="kind">Community standard</span>
+        <h3>Microformats</h3>
+        <p>Class names that make posts, people and events in ordinary HTML readable by machines.</p>
+        <span class="links">microformats.org</span>
+      </a>
+      <a class="spec-card" href="https://www.w3.org/TR/webmention/">
+        <span class="kind">W3C Recommendation</span>
+        <h3>Webmention</h3>
+        <p>A ping from one site to another saying “I linked to you”. How replies and likes cross sites.</p>
+        <span class="links">w3.org/TR/webmention</span>
+      </a>
+      <a class="spec-card" href="https://www.w3.org/TR/post-type-discovery/">
+        <span class="kind">W3C Note</span>
+        <h3>Post Type Discovery</h3>
+        <p>How to tell a like from a reply from a note, by which properties a post has.</p>
+        <span class="links">w3.org/TR/post-type-discovery</span>
+      </a>
+      <a class="spec-card" href="https://www.w3.org/TR/websub/">
+        <span class="kind">W3C Recommendation</span>
+        <h3>WebSub</h3>
+        <p>Real-time notifications that a feed has changed, so readers don’t have to keep checking.</p>
+        <span class="links">w3.org/TR/websub</span>
+      </a>
+      <a class="spec-card" href="https://indieweb.org/Microsub">
+        <span class="kind">Draft</span>
+        <h3>Microsub</h3>
+        <p>The reading side of Micropub: one API for following feeds, so reader apps and servers can mix and match.</p>
+        <span class="links">indieweb.org/Microsub</span>
+      </a>
+      <a class="spec-card" href="https://indieweb.org/POSSE">
+        <span class="kind">Practice</span>
+        <h3>POSSE</h3>
+        <p>Publish on your Own Site, Syndicate Elsewhere. The original stays home; copies link back.</p>
+        <span class="links">indieweb.org/POSSE</span>
+      </a>
+    </div>
+  </section>
+
+  <section class="doc-section" id="start">
+    <p class="eyebrow">Getting started</p>
+    <h2>Where to go next</h2>
+    <ul class="links-list">
+      <li><a href="https://indieweb.org/Getting_Started">IndieWeb: Getting Started</a><span>The wiki’s guide to setting up your own site.</span></li>
+      <li><a href="https://indieweb.org/Micropub/Servers">Micropub servers</a><span>CMSs, plugins and services that accept Micropub posts.</span></li>
+      <li><a href="https://quill.p3k.io/">Quill on the web</a><span>Aaron Parecki’s original Micropub client, which this app is modelled on.</span></li>
+      <li><a href="https://indieweb.org/Micropub/Clients">Micropub clients</a><span>Other apps that post to your site.</span></li>
+      <li><a href="https://indiewebify.me/">IndieWebify.Me</a><span>Checks your site’s markup and endpoints step by step.</span></li>
+      <li><a href="https://indieweb.org/Homebrew_Website_Club">Homebrew Website Club</a><span>Meetups, online and in person, for people building their sites.</span></li>
+      <li><a href="https://chat.indieweb.org/">IndieWeb chat</a><span>Ask questions. Someone has probably built what you’re thinking of.</span></li>
+      <li><a href="https://indieweb.org/">indieweb.org</a><span>The wiki, with a page for nearly every idea above.</span></li>
+    </ul>
+  </section>
+
+  <div style="height:104px"></div>
+</main>
+
+<footer>
+  <div class="wrap">
+    <p>Quill for iOS is a native take on <a href="https://quill.p3k.io/">Quill</a>, the web Micropub client by Aaron Parecki. Apache License 2.0.</p>
+    <nav><a href="../">Home</a><a href="https://github.com/caseyg/quill-native">Source</a><a href="https://github.com/caseyg/quill-native/issues">Issues</a></nav>
+  </div>
+</footer>
+<script>
+  const nav = document.getElementById('nav');
+  addEventListener('scroll', () => nav.classList.toggle('scrolled', scrollY > 8), { passive: true });
+</script>
+</body>
+</html>
