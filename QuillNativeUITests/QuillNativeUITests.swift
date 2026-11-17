@@ -257,6 +257,40 @@ final class QuillNativeUITests: XCTestCase {
         XCTAssertTrue(app.buttons["compose"].waitForExistence(timeout: 5))
     }
 
+    /// Articles are written in Markdown, styled in place, and typing keeps the cursor where it is.
+    func testMarkdownArticleStylesAsYouType() throws {
+        let app = launch(route("article"))
+        let editor = app.textViews["article.content"]
+        XCTAssertTrue(editor.waitForExistence(timeout: 5))
+        editor.tap()
+        let typed = "## Heading\nSome **bold** and *italic* and a [link](https://example.com)\n> quote\n- item\n"
+        editor.typeText(typed)
+        XCTAssertEqual(editor.value as? String, typed, "Typing should land in order, without the cursor jumping")
+
+        // With nothing selected, each button leaves the cursor between its marks, so italic nests inside the bold.
+        app.buttons["Bold"].tap(); editor.typeText("strong")
+        app.buttons["Italic"].tap(); editor.typeText("soft")
+        app.buttons["Heading"].tap()
+        XCTAssertEqual(editor.value as? String, typed + "## **strong*soft***")
+        app.buttons["Heading"].tap()
+        XCTAssertEqual(editor.value as? String, typed + "**strong*soft***")
+
+        editor.typeText(" ")
+        app.buttons["Link"].tap()
+        let field = app.alerts["Link"].textFields.firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: 3))
+        field.typeText("quill.example")
+        app.alerts["Link"].buttons["Add"].tap()
+        editor.typeText("site")
+        // The link goes where the cursor was, still inside the marks, with its label at the cursor.
+        XCTAssertEqual(editor.value as? String, typed + "**strong*soft [site](https://quill.example/)***")
+
+        let shot = XCTAttachment(screenshot: app.screenshot())
+        shot.name = "markdown-editor"
+        shot.lifetime = .keepAlways
+        add(shot)
+    }
+
     /// Drafts on GitHub starts off, with a way to sign in.
     func testGitHubDraftsStartsSignedOut() {
         let app = launch()

@@ -143,8 +143,8 @@ public enum ContentFormat: String, Codable, CaseIterable, Identifiable, Sendable
     public func fitted(to kind: PostKind) -> ContentFormat? {
         let options = ContentFormat.supported(by: kind)
         if options.contains(self) { return self }
-        // Articles have a rich editor, so plain text becomes formatted text there.
-        if self == .plain, options.contains(.html) { return .html }
+        // Articles have a formatting editor, so plain text becomes Markdown there.
+        if self == .plain, options.contains(.markdown) { return .markdown }
         return options.contains(.plain) ? .plain : options.first
     }
 }

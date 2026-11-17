@@ -151,6 +151,8 @@ struct ComposerView: View {
                 }
                 if draft.kind == .article && draft.isHTML && !htmlSource {
                     RichEditor(html: $draft.content, controller: rich)
+                } else if draft.kind == .article && draft.format == .markdown {
+                    MarkdownEditor(text: $draft.content, controller: rich)
                 } else {
                     TextEditor(text: $draft.content)
                         .font(.system(.body, design: .monospaced))
@@ -325,7 +327,7 @@ struct ComposerView: View {
 
     private var actionBar: some View {
         HStack(spacing: 0) {
-            if draft.kind == .article && draft.isHTML && !htmlSource {
+            if formattable {
                 barButton("Bold", "bold") { rich.bold() }
                 barButton("Italic", "italic") { rich.italic() }
                 barButton("Heading", "textformat.size") { rich.heading() }
@@ -376,6 +378,11 @@ struct ComposerView: View {
 
     private var kind: Binding<PostKind> {
         Binding(get: { draft.kind }, set: { new in withAnimation(.snappy) { draft.prepare(for: new, preferences: store.preferences) } })
+    }
+
+    /// Whether the article editor shown takes the Bold, Italic, Heading and Link buttons.
+    private var formattable: Bool {
+        draft.kind == .article && (draft.isHTML ? !htmlSource : draft.format == .markdown)
     }
 
     private var sendTitle: String {

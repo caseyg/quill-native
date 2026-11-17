@@ -29,7 +29,7 @@ Also: a share extension that saves text, links and images as drafts; Shortcuts a
 
 ## Build
 
-Open `QuillNative.xcodeproj`, choose the `QuillNative` scheme, and run. No third-party packages.
+Open `QuillNative.xcodeproj`, choose the `QuillNative` scheme, and run. The only package is Apple’s [swift-markdown](https://github.com/swiftlang/swift-markdown), which the article editor uses to style Markdown as you type.
 
 For a device, copy `Config/Signing.local.example.xcconfig` to `Config/Signing.local.xcconfig` and set your team ID. Use your own bundle IDs and App Group, and change `SharedStorage.group` and both entitlement files to match. Then:
 
