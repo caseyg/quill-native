@@ -30,6 +30,8 @@ final class AppStore {
     var error: String?
     var busy = false
     let auth = AuthService()
+    /// The copy of drafts kept in a GitHub repository, when the person turns it on.
+    let github = GitHubBackup()
 
     static let composeSource = "compose"
 
@@ -265,6 +267,8 @@ final class AppStore {
 
     func reloadDrafts() {
         do { drafts = try SharedStorage.drafts.load() } catch { self.error = error.localizedDescription }
+        // Every change to drafts, including ones from the share extension, passes through here.
+        github.schedule()
     }
 
     func save(_ draft: Draft) throws {

@@ -248,9 +248,27 @@ final class QuillNativeUITests: XCTestCase {
         let app = launch()
         XCTAssertTrue(app.buttons["settings"].waitForExistence(timeout: 5))
         app.buttons["settings"].tap()
-        XCTAssertTrue(app.buttons["signout"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["settings.github"].waitForExistence(timeout: 5))
+        // Sign Out is at the bottom, below the fold on smaller screens.
+        let signOut = app.buttons["signout"]
+        for _ in 0..<3 where !signOut.isHittable { app.swipeUp() }
+        XCTAssertTrue(signOut.waitForExistence(timeout: 5))
         app.buttons["Done"].tap()
         XCTAssertTrue(app.buttons["compose"].waitForExistence(timeout: 5))
+    }
+
+    /// Drafts on GitHub starts off, with a way to sign in.
+    func testGitHubDraftsStartsSignedOut() {
+        let app = launch()
+        XCTAssertTrue(app.buttons["settings"].waitForExistence(timeout: 5))
+        app.buttons["settings"].tap()
+        let github = app.buttons["settings.github"]
+        XCTAssertTrue(github.waitForExistence(timeout: 5))
+        github.tap()
+        XCTAssertTrue(app.buttons["github.token"].waitForExistence(timeout: 5))
+        app.buttons["github.token"].tap()
+        XCTAssertTrue(app.secureTextFields["github.tokenfield"].waitForExistence(timeout: 5))
+        app.buttons["Cancel"].tap()
     }
 
     func testShareExtensionSavesURLDraft() {

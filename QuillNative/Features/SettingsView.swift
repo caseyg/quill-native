@@ -42,6 +42,16 @@ struct SettingsView: View {
                 if store.syncEnabled == true { Text(syncSummary) }
             }
             Section {
+                NavigationLink { GitHubSettingsView() } label: {
+                    LabeledContent("Drafts on GitHub", value: store.github.connection?.repository?.fullName ?? "Off")
+                }
+                .accessibilityIdentifier("settings.github")
+            } footer: {
+                if let repository = store.github.connection?.repository, !repository.isPrivate {
+                    Text("Public repository. Anyone can read these drafts.").foregroundStyle(.orange)
+                }
+            }
+            Section {
                 Link("Source Code", destination: URL(string: "https://github.com/caseyg/quill-native")!)
                 Link("Based on Quill", destination: URL(string: "https://github.com/aaronpk/Quill")!)
             } footer: {

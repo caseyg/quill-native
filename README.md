@@ -21,6 +21,8 @@ Enter your domain and tap **Sign In**. The app finds your site’s IndieAuth and
 - Tap a post to edit it. Swipe for **See on Web**, **Edit** and **Delete**. Updates send only what changed. Events, reviews and other structured posts open on the web.
 - **Settings → Post Types** hides types you don't use from the new-post menu and the list. **Markdown** writes posts as Markdown, sent as plain text with `p3k-content-type: text/markdown` (a Quill convention, since Micropub itself only defines text and HTML).
 
+- **Settings → Drafts on GitHub** keeps a copy of every draft in a GitHub repository you choose. Each save writes the draft as a Markdown file with front matter, with its photos and recordings in `media/`; publishing or deleting a draft removes it. This is a backup, not publishing. In a public repository anyone can read the drafts, so the app asks first.
+
 Post types: note, photo, reply and RSVP, article, bookmark, like, repost, event, review, itinerary, code, weight, exercise.
 
 Also: a share extension that saves text, links and images as drafts; Shortcuts actions (**New Note**, **New Bookmark**, **Open Draft**); and links such as `quill-native://reply?reply=https%3A%2F%2Fexample.com%2Fpost`.
@@ -49,6 +51,16 @@ QUILL_CLIENT_ID = https:/$()/example.com/quill/
 
 The page must contain `<link rel="redirect_uri" href="quill-native://oauth">`.
 
+## GitHub sign-in
+
+Drafts on GitHub signs in with GitHub’s [device flow](https://docs.github.com/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps#device-flow), which needs only a public client ID and no secret. Create an OAuth app (GitHub **Settings → Developer settings → OAuth Apps**), tick **Enable Device Flow**, and set its client ID:
+
+```
+QUILL_GITHUB_CLIENT_ID = Ov23li...
+```
+
+Without one, the app offers only a personal access token. A fine-grained token with read and write access to **Contents** on one repository is the narrowest choice.
+
 ## Test
 
 ```sh
@@ -65,7 +77,7 @@ It listens on `127.0.0.1:8765` only and accepts only the made-up `fixture-token`
 
 ## Data
 
-Tokens stay in the device Keychain. Drafts and their photos stay in the app’s App Group container. Nothing is sent anywhere except your own site, plus pages you ask it to preview.
+Tokens stay in the device Keychain. Drafts and their photos stay in the app’s App Group container. Nothing is sent anywhere except your own site, pages you ask it to preview, and, if you turn on Drafts on GitHub, the repository you choose. The GitHub token is in the Keychain too.
 
 ## Credits
 
