@@ -5,6 +5,7 @@ struct SettingsView: View {
     @Environment(AppStore.self) private var store
     @Environment(\.dismiss) private var dismiss
     @State private var confirmingSignOut = false
+    @State private var confirmingStopSync = false
 
     var body: some View {
         @Bindable var store = store
@@ -27,6 +28,23 @@ struct SettingsView: View {
                     Text("Stone").tag("st")
                 }
                 NavigationLink("Advanced") { AdvancedView() }
+            }
+            Section {
+                Toggle("Sync Posts", isOn: Binding(get: { store.syncEnabled == true }, set: { on in
+                    if on { store.setSync(true) } else { confirmingStopSync = true }
+                }))
+                .accessibilityIdentifier("settings.sync")
+                .confirmationDialog("Stop Syncing", isPresented: $confirmingStopSync) {
+                    Button("Delete Posts from iPhone", role: .destructive) { store.setSync(false) }
+                } message: {
+                    Text("Posts on your site aren’t affected.")
+                }
+                if store.syncEnabled == true {
+                    Button("Sync Everything Again") { store.syncEverything() }
+                        .disabled(store.syncing)
+                }
+            } footer: {
+                if store.syncEnabled == true { Text(syncSummary) }
             }
             Section {
                 Link("Source Code", destination: URL(string: "https://github.com/caseyg/quill-native")!)
@@ -52,6 +70,13 @@ struct SettingsView: View {
         .onChange(of: store.preferences) { _, value in
             do { try SharedStorage.write(value, key: "preferences") } catch { store.error = error.localizedDescription }
         }
+    }
+
+    private var syncSummary: String {
+        let count = "\(store.library.posts.count.formatted()) posts on this iPhone"
+        if store.syncing { return count + " · Syncing" }
+        guard let synced = store.library.synced else { return count }
+        return count + " · Updated " + synced.formatted(.relative(presentation: .named))
     }
 
     private var version: String {

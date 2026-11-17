@@ -11,7 +11,12 @@ final class AppStore {
     var receipts: [Receipt] = SharedStorage.read([Receipt].self, key: "receipts") ?? []
     /// Posts from the site, kept on device for browsing, search and editing.
     var library = Library()
+    /// Whether posts are kept on this device. Nil until the person has been asked.
+    private(set) var syncEnabled: Bool? = SharedStorage.defaults.object(forKey: "syncEnabled") as? Bool
+    /// Shows the question about keeping posts on this device.
+    var askingToSync = false
     var syncing = false
+    @ObservationIgnored private var syncTask: Task<Void, Never>?
     /// The post being fetched for editing.
     var opening: Post.ID?
     /// Posts sent this session, kept in the list until a sync includes them.
@@ -41,8 +46,11 @@ final class AppStore {
             let me = URL(string: "http://localhost:8765/")!
             account = Account(me: me, micropub: me.appendingPathComponent("micropub"), scope: "create update delete media")
             try? Keychain.save("fixture-token", for: me.absoluteString)
+            syncEnabled = !ProcessInfo.processInfo.arguments.contains("--sync-off")
         }
         #endif
+        // Libraries downloaded before syncing was a choice stay on.
+        if syncEnabled == nil, account != nil, libraryStore?.load().synced != nil { setSync(true, starting: false) }
         loadLibrary()
     }
 
@@ -55,7 +63,7 @@ final class AppStore {
         try SharedStorage.write(account, key: "account")
         self.account = account
         loadLibrary()
-        await refresh()
+        await refresh(asking: true)
     }
 
     func signIn(site: String, token: String) async throws {
@@ -71,13 +79,44 @@ final class AppStore {
         try SharedStorage.write(account, key: "account")
         self.account = account; self.config = config
         loadLibrary()
-        await sync()
+        await refresh(asking: true)
     }
 
-    func refresh() async {
+    /// Reloads the server's settings and fetches new posts. `asking` offers to sync when it is off,
+    /// as after signing in or pulling to refresh.
+    func refresh(asking: Bool = false) async {
         guard let client else { return }
         if let config = try? await client.configuration() { self.config = config }
-        await sync()
+        guard syncEnabled == true else { askingToSync = asking; return }
+        // Only posts newer than the ones on device; a first download runs on without holding the refresh.
+        if library.isComplete { await sync() } else { startSync() }
+    }
+
+    /// Turns keeping posts on device on or off. Off deletes the posts kept here; the site is not touched.
+    func setSync(_ on: Bool, starting: Bool = true) {
+        syncEnabled = on
+        SharedStorage.defaults.set(on, forKey: "syncEnabled")
+        if on {
+            if starting { startSync() }
+        } else {
+            syncTask?.cancel(); syncTask = nil
+            libraryStore?.delete()
+            loadLibrary()
+        }
+    }
+
+    /// Downloads every post again, which also drops posts deleted on the site.
+    func syncEverything() {
+        library.complete = false
+        startSync()
+    }
+
+    private func startSync() {
+        guard syncTask == nil else { return }
+        syncTask = Task { [weak self] in
+            await self?.sync()
+            self?.syncTask = nil
+        }
     }
 
     // MARK: Library
@@ -85,7 +124,7 @@ final class AppStore {
     private var libraryStore: LibraryStore? { account.flatMap { SharedStorage.library(for: $0.me) } }
 
     func loadLibrary() {
-        library = libraryStore?.load() ?? Library()
+        library = syncEnabled == true ? libraryStore?.load() ?? Library() : Library()
         // Posts sent before the library existed.
         for receipt in receipts.reversed() where receipt.accountURL == nil || receipt.accountURL == account?.me {
             guard !library.posts.contains(where: { $0.url == receipt.url }) else { continue }
@@ -94,27 +133,29 @@ final class AppStore {
         }
     }
 
-    /// Downloads every post the site lists. Failures leave the posts already on device in place.
+    /// Fetches posts newer than the ones on device, or every post when the library is new or unfinished.
+    /// Failures leave the posts already on device in place.
     func sync() async {
-        guard let account, let client, !syncing else { return }
+        guard syncEnabled == true, let account, let client, !syncing else { return }
         syncing = true; defer { syncing = false; syncProgress = nil }
+        let incremental = library.isComplete
+        let known = incremental ? Set(library.posts.map(\.id)) : []
         // Dates of posts already on device let the bar show how far back the sync has reached.
         let oldest = library.posts.compactMap(\.published).min()
-        let filling = library.posts.isEmpty
-        syncProgress = SyncProgress(count: 0, fraction: oldest == nil ? nil : 0)
+        if !incremental { syncProgress = SyncProgress(count: 0, fraction: oldest == nil ? nil : 0) }
         do {
-            let result = try await LibrarySync.fetch(client: client, me: account.me) { [weak self] page in
-                await self?.received(page, oldest: oldest, filling: filling, for: account)
+            let result = try await LibrarySync.fetch(client: client, me: account.me, known: known) { [weak self] page in
+                await self?.received(page, oldest: oldest, filling: !incremental, for: account)
             }
-            guard self.account == account else { return }
+            guard self.account == account, syncEnabled == true, !Task.isCancelled else { return }
             // A sync that began before a post was sent may not include it yet.
             let fetched = Set(result.posts.map(\.url))
             let sent = library.posts.filter { recentlySent.contains($0.url) && !fetched.contains($0.url) }
             recentlySent.subtract(fetched)
-            library.replace(with: sent + result.posts, source: result.source)
+            library.replace(with: sent + result.posts, source: result.source, keeping: incremental, complete: result.finished)
             saveLibrary()
         } catch {
-            if library.posts.isEmpty { self.error = error.localizedDescription }
+            if library.posts.isEmpty && !Task.isCancelled { self.error = error.localizedDescription }
         }
     }
 
@@ -128,7 +169,7 @@ final class AppStore {
     /// Shows each page as it arrives. A first sync lists posts right away instead of after the last page.
     private func received(_ page: [Post], oldest: Date?, filling: Bool, for account: Account) {
         // A sync still running after signing out or into another site must not touch this list.
-        guard self.account == account, var progress = syncProgress else { return }
+        guard self.account == account, syncEnabled == true, var progress = syncProgress else { return }
         progress.count += page.count
         if let oldest, let reached = page.compactMap(\.published).min() {
             let span = Date().timeIntervalSince(oldest)
@@ -143,7 +184,7 @@ final class AppStore {
 
     /// Encodes and writes the library away from the main thread.
     private func saveLibrary() {
-        guard let store = libraryStore else { return }
+        guard syncEnabled == true, let store = libraryStore else { return }
         let snapshot = library
         Task.detached(priority: .utility) { try? store.save(snapshot) }
     }
@@ -203,7 +244,10 @@ final class AppStore {
     func signOut() async {
         guard let account else { return }
         let token = try? Keychain.token(for: account.me.absoluteString)
+        syncTask?.cancel(); syncTask = nil
         libraryStore?.delete(); library = Library()
+        // The next site signed in to is asked again.
+        syncEnabled = nil; SharedStorage.defaults.removeObject(forKey: "syncEnabled")
         try? Keychain.delete(account.me.absoluteString)
         SharedStorage.defaults.removeObject(forKey: "account")
         self.account = nil; config = ServerConfig(); showSettings = false

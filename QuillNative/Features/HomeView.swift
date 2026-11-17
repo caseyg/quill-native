@@ -70,18 +70,30 @@ struct HomeView: View {
         .overlay {
             if store.drafts.isEmpty && store.library.posts.isEmpty {
                 if store.syncing { ProgressView() } // Until the first page arrives.
-                else { ContentUnavailableView("No Posts", systemImage: "square.and.pencil") }
+                else if store.syncEnabled == true { ContentUnavailableView("No Posts", systemImage: "square.and.pencil") }
+                else {
+                    ContentUnavailableView {
+                        Label("No Posts", systemImage: "square.and.pencil")
+                    } description: {
+                        Text("Sync to browse, search and edit your posts here.")
+                    } actions: {
+                        Button("Sync Posts") { store.setSync(true) }.prominentAction()
+                    }
+                }
             } else if drafts.isEmpty && posts.isEmpty {
                 ContentUnavailableView.search(text: search)
             }
         }
-        .safeAreaInset(edge: .top, spacing: 0) {
-            if let progress = store.syncProgress, progress.count > 0 { SyncBar(progress: progress).transition(.opacity) }
-        }
-        .animation(.snappy, value: store.syncProgress == nil)
         .navigationTitle(store.account?.me.host ?? "Posts")
+        .syncStatus(store.syncProgress)
         .searchable(text: $search)
-        .refreshable { store.reloadDrafts(); await store.refresh() }
+        .refreshable { store.reloadDrafts(); await store.refresh(asking: true) }
+        .alert("Sync Your Posts?", isPresented: Binding(get: { store.askingToSync }, set: { store.askingToSync = $0 })) {
+            Button("Not Now", role: .cancel) { if store.syncEnabled == nil { store.setSync(false) } }
+            Button("Sync") { store.setSync(true) }
+        } message: {
+            Text("Keep a copy on this iPhone to browse, search and edit your posts.")
+        }
         .toolbar { toolbar }
         .alert("Edit Post", isPresented: $askingForURL) {
             TextField("URL", text: $editURL)
@@ -139,32 +151,45 @@ struct HomeView: View {
     }
 }
 
+extension View {
+    /// Sync progress under the title, where it stays put while the list scrolls. A slim bar before iOS 26.
+    @ViewBuilder func syncStatus(_ progress: AppStore.SyncProgress?) -> some View {
+        if #available(iOS 26.0, *) {
+            navigationSubtitle(progress.map(SyncBar.text) ?? "")
+        } else {
+            safeAreaInset(edge: .top, spacing: 0) {
+                if let progress, progress.count > 0 { SyncBar(progress: progress).transition(.opacity) }
+            }
+            .animation(.snappy, value: progress == nil)
+        }
+    }
+}
+
 /// A slim bar while posts download, so the list stays usable.
 private struct SyncBar: View {
     let progress: AppStore.SyncProgress
+
+    static func text(_ progress: AppStore.SyncProgress) -> String {
+        if let fraction = progress.fraction { return "Syncing \(fraction.formatted(.percent.precision(.fractionLength(0))))" }
+        return progress.count == 0 ? "Syncing" : "Syncing \(progress.count.formatted()) Posts"
+    }
 
     var body: some View {
         HStack(spacing: 10) {
             if let fraction = progress.fraction {
                 ProgressView(value: fraction).animation(.snappy, value: fraction)
-                count
             } else {
-                // A first sync can't know how many posts there are, only how many have arrived.
                 ProgressView().controlSize(.mini)
-                count
                 Spacer(minLength: 0)
             }
+            Text("\(progress.count) Posts").monospacedDigit().contentTransition(.numericText())
         }
         .font(.footnote)
         .foregroundStyle(.secondary)
         .padding(.horizontal, 20)
         .padding(.vertical, 6)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Syncing \(progress.count) posts")
-    }
-
-    private var count: some View {
-        Text("\(progress.count) Posts").monospacedDigit().contentTransition(.numericText())
+        .accessibilityLabel(SyncBar.text(progress))
     }
 }
 

@@ -222,6 +222,27 @@ final class QuillNativeUITests: XCTestCase {
         XCTAssertTrue(request.contains("p3k-content-type") && request.contains("markdown"), String(request))
     }
 
+    func testSyncIsOptInAndTurningItOffClearsPosts() {
+        let app = launch(["--sync-off"])
+        let sync = app.buttons["Sync Posts"]
+        XCTAssertTrue(sync.waitForExistence(timeout: 5))
+        XCTAssertFalse(row("Trying the new café", in: app).exists)
+        sync.tap()
+        XCTAssertTrue(row("Trying the new café", in: app).waitForExistence(timeout: 15), "Is scripts/fixture_server.py running?")
+        app.buttons["settings"].tap()
+        let toggle = app.switches["settings.sync"]
+        XCTAssertTrue(toggle.waitForExistence(timeout: 5))
+        XCTAssertEqual(toggle.value as? String, "1")
+        toggle.switches.firstMatch.tap()
+        let delete = app.buttons["Delete Posts from iPhone"]
+        XCTAssertTrue(delete.waitForExistence(timeout: 5))
+        delete.tap()
+        XCTAssertEqual(toggle.value as? String, "0")
+        app.buttons["Done"].tap()
+        XCTAssertTrue(app.buttons["Sync Posts"].waitForExistence(timeout: 5))
+        XCTAssertFalse(row("Trying the new café", in: app).exists)
+    }
+
     func testSettingsOpensAndCloses() {
         let app = launch()
         XCTAssertTrue(app.buttons["settings"].waitForExistence(timeout: 5))

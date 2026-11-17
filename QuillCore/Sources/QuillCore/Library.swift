@@ -324,10 +324,16 @@ public struct Library: Codable, Equatable, Sendable {
     public var posts: [Post] = []
     public var source: LibrarySource?
     public var synced: Date?
+    /// False while a first download has not reached the oldest post. Libraries saved before this was kept were complete.
+    public var complete: Bool?
     public init() {}
 
+    /// Whether a refresh only needs posts newer than the ones on device.
+    public var isComplete: Bool { complete ?? (synced != nil) }
+
     /// Newest first. Posts without a date keep the server's order at the end.
-    public mutating func replace(with posts: [Post], source: LibrarySource, now: Date = Date()) {
+    /// `keeping` holds on to posts the fetch did not include, for a feed or a refresh that stopped at known posts.
+    public mutating func replace(with posts: [Post], source: LibrarySource, keeping: Bool = false, complete: Bool = true, now: Date = Date()) {
         var seen = Set<String>()
         let known = Dictionary(self.posts.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         var merged = posts.filter { seen.insert($0.id).inserted }.map { post in
@@ -336,7 +342,7 @@ public struct Library: Codable, Equatable, Sendable {
             var post = post; post.citeAuthor = old.citeAuthor; post.citeText = old.citeText; return post
         }
         // A feed shows only recent posts, so keep older ones already on device.
-        if source == .feed { merged += self.posts.filter { seen.insert($0.id).inserted } }
+        if source == .feed || keeping { merged += self.posts.filter { seen.insert($0.id).inserted } }
         self.posts = merged.enumerated().sorted { a, b in
             switch (a.element.published, b.element.published) {
             case let (x?, y?): return x > y
@@ -345,7 +351,7 @@ public struct Library: Codable, Equatable, Sendable {
             default: return a.offset < b.offset
             }
         }.map(\.element)
-        self.source = source; synced = now
+        self.source = source; synced = now; self.complete = complete
     }
 
     /// Replaces a post in place, or adds a new one at the top.
@@ -375,18 +381,25 @@ public enum LibrarySync {
 
     /// Every post from Micropub when the server lists them, otherwise recent posts from the site's feed.
     /// `progress` receives each page as it arrives, so a list can fill in while the rest downloads.
-    public static func fetch(client: MicropubClient, me: URL, maxPages: Int = 200, fetch: @escaping Fetch = Network.send, progress: @escaping @Sendable ([Post]) async -> Void = { _ in }) async throws -> (posts: [Post], source: LibrarySource) {
+    public static func fetch(client: MicropubClient, me: URL, maxPages: Int = 200, known: Set<String> = [], fetch: @escaping Fetch = Network.send, progress: @escaping @Sendable ([Post]) async -> Void = { _ in }) async throws -> (posts: [Post], source: LibrarySource, finished: Bool) {
+        /// Pages run newest first, so a page with a post already on device means the rest are too.
+        func reachesKnown(_ page: [Post]) -> Bool { !known.isEmpty && page.contains { known.contains($0.id) } }
         if var page = try await client.posts() {
             var posts = page.posts
             await progress(page.posts)
             var cursors = Set<String>()
-            for _ in 1..<maxPages {
-                guard let after = page.after, cursors.insert(after).inserted, !page.posts.isEmpty else { break }
-                guard let next = try await client.posts(after: after) else { break }
-                page = next; posts += next.posts
-                await progress(next.posts)
+            var finished = true
+            if !reachesKnown(page.posts) {
+                finished = false
+                for _ in 1..<maxPages {
+                    guard let after = page.after, cursors.insert(after).inserted, !page.posts.isEmpty else { finished = true; break }
+                    guard let next = try await client.posts(after: after) else { finished = true; break }
+                    page = next; posts += next.posts
+                    await progress(next.posts)
+                    if reachesKnown(next.posts) { finished = true; break }
+                }
             }
-            return (posts, .micropub)
+            return (posts, .micropub, finished)
         }
         let (html, response) = try await fetch(URLRequest(url: me)); try Network.check(response)
         guard let feedURL = Feed.links(html: String(decoding: html, as: UTF8.self), baseURL: response.url ?? me).first else {
@@ -400,8 +413,9 @@ public enum LibrarySync {
             let page = Feed.parse(data)
             posts += page.posts; next = page.next
             await progress(page.posts)
+            if reachesKnown(page.posts) { next = nil }
         }
-        return (posts, .feed)
+        return (posts, .feed, next == nil || visited.contains(next!))
     }
 }
 
