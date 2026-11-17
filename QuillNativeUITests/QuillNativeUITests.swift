@@ -224,23 +224,24 @@ final class QuillNativeUITests: XCTestCase {
 
     func testSyncIsOptInAndTurningItOffClearsPosts() {
         let app = launch(["--sync-off"])
-        let sync = app.buttons["Sync Posts"]
-        XCTAssertTrue(sync.waitForExistence(timeout: 5))
-        XCTAssertFalse(row("Trying the new café", in: app).exists)
-        sync.tap()
-        XCTAssertTrue(row("Trying the new café", in: app).waitForExistence(timeout: 15), "Is scripts/fixture_server.py running?")
+        XCTAssertTrue(app.buttons["settings"].waitForExistence(timeout: 5))
         app.buttons["settings"].tap()
         let toggle = app.switches["settings.sync"]
         XCTAssertTrue(toggle.waitForExistence(timeout: 5))
-        XCTAssertEqual(toggle.value as? String, "1")
+        XCTAssertEqual(toggle.value as? String, "0")
+        toggle.switches.firstMatch.tap()
+        // The footer counts the posts kept on the device once the download finishes.
+        let summary = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@ AND NOT label CONTAINS %@", "posts on this iPhone · Updated", "Syncing")).firstMatch
+        XCTAssertTrue(summary.waitForExistence(timeout: 15), "Is scripts/fixture_server.py running?")
+        XCTAssertFalse(summary.label.hasPrefix("0 "), summary.label)
         toggle.switches.firstMatch.tap()
         let delete = app.buttons["Delete Posts from iPhone"]
         XCTAssertTrue(delete.waitForExistence(timeout: 5))
         delete.tap()
         XCTAssertEqual(toggle.value as? String, "0")
         app.buttons["Done"].tap()
-        XCTAssertTrue(app.buttons["Sync Posts"].waitForExistence(timeout: 5))
-        XCTAssertFalse(row("Trying the new café", in: app).exists)
+        search("Trying the new", in: app)
+        XCTAssertFalse(row("Trying the new café", in: app).waitForExistence(timeout: 3))
     }
 
     func testSettingsOpensAndCloses() {
