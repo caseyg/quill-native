@@ -21,7 +21,7 @@ struct GitHubSettingsView: View {
                 signedOut
             }
         }
-        .navigationTitle("GitHub")
+        .navigationTitle("Drafts on GitHub")
         .navigationBarTitleDisplayMode(.inline)
         .sheet(item: $code) { code in
             NavigationStack { DeviceCodeView(code: code) }.environment(store)
