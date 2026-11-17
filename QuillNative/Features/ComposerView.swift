@@ -60,7 +60,7 @@ struct ComposerView: View {
             .interactiveDismissDisabled(sending)
             .sheet(isPresented: $recordingVoice) {
                 VoiceNoteSheet { text, audio in insertVoiceNote(text, audio: audio) }
-                    .presentationDetents([.height(340)])
+                    .presentationDetents([.medium, .large])
             }
             .photosPicker(isPresented: $showPhotos, selection: $picked, maxSelectionCount: 10, matching: .images)
             .fullScreenCover(isPresented: $showCamera) {
