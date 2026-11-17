@@ -126,15 +126,14 @@ p { text-wrap: pretty; }
 .hero-phones .phone:nth-child(3) { transform: translateX(-14%) rotate(6deg) translateY(9%); z-index: 1; }
 
 /* Phone frame */
-.phone {
-  aspect-ratio: 1000 / 2118;
-  padding: 2.4%;
-  border-radius: 13% / 6%;
+.phone { container-type: inline-size; position: relative; }
+.phone img {
+  width: 100%; height: auto; aspect-ratio: 603 / 1311;
+  border: 3.4cqw solid var(--frame);
+  border-radius: 16.5cqw;
   background: var(--frame);
-  box-shadow: var(--shadow), inset 0 0 0 1.5px rgba(255,255,255,.08);
-  position: relative;
+  box-shadow: var(--shadow), 0 0 0 1px rgba(255,255,255,.07);
 }
-.phone img { width: 100%; height: 100%; object-fit: cover; border-radius: 11% / 5.1%; }
 
 /* Works-with strip */
 .works {
