@@ -34,11 +34,6 @@ struct SettingsView: View {
                     if on { store.setSync(true) } else { confirmingStopSync = true }
                 }))
                 .accessibilityIdentifier("settings.sync")
-                .confirmationDialog("Stop Syncing", isPresented: $confirmingStopSync) {
-                    Button("Delete Posts from iPhone", role: .destructive) { store.setSync(false) }
-                } message: {
-                    Text("Posts on your site aren’t affected.")
-                }
                 if store.syncEnabled == true {
                     Button("Sync Everything Again") { store.syncEverything() }
                         .disabled(store.syncing)
@@ -63,6 +58,12 @@ struct SettingsView: View {
         }
         .navigationTitle("Settings")
         .navigationBarTitleDisplayMode(.inline)
+        // On the form rather than the switch, so turning the switch off reliably presents it.
+        .confirmationDialog("Stop Syncing", isPresented: $confirmingStopSync, titleVisibility: .visible) {
+            Button("Delete Posts from iPhone", role: .destructive) { store.setSync(false) }
+        } message: {
+            Text("Posts on your site aren’t affected.")
+        }
         .toolbar {
             ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
         }

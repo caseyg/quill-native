@@ -102,7 +102,8 @@ final class VoiceRecorder {
             throw QuillError("Allow microphone access in Settings to record voice notes.")
         }
         let session = AVAudioSession.sharedInstance()
-        try session.setCategory(.record, mode: .spokenAudio)
+        // The spoken-audio mode is for playback; with the record category it fails with OSStatus -50.
+        try session.setCategory(.record, mode: .default)
         try session.setActive(true)
         let settings: [String: Any] = [
             AVFormatIDKey: kAudioFormatMPEG4AAC,
