@@ -31,6 +31,10 @@ struct HomeView: View {
                             Button(role: .destructive) { store.remove(draft) } label: { Label("Delete", systemImage: "trash") }
                         }
                         .contextMenu {
+                            if let url = store.github.webURL(for: draft) {
+                                Button { openURL(url) } label: { Label("Open on GitHub", systemImage: "arrow.up.right.square") }
+                                Divider()
+                            }
                             Button(role: .destructive) { store.remove(draft) } label: { Label("Delete", systemImage: "trash") }
                         }
                     }
@@ -56,6 +60,17 @@ struct HomeView: View {
                                 Button { Task { await store.edit(post) } } label: { Label("Edit", systemImage: "pencil") }
                             }
                             Button { openURL(post.url) } label: { Label("See on Web", systemImage: "globe") }
+                            ForEach(post.syndicatedCopies) { copy in
+                                Button { openURL(copy.url) } label: { Label("Open on \(copy.service)", systemImage: "arrow.up.right.square") }
+                            }
+                            let targets = store.syndicationTargets(for: post)
+                            if !targets.isEmpty {
+                                Menu {
+                                    ForEach(targets) { target in
+                                        Button(target.name) { Task { await store.syndicate(post, to: target) } }
+                                    }
+                                } label: { Label("Syndicate", systemImage: "arrow.triangle.branch") }
+                            }
                             ShareLink(item: post.url) { Label("Share", systemImage: "square.and.arrow.up") }
                             Button { UIPasteboard.general.url = post.url } label: { Label("Copy Link", systemImage: "link") }
                             Divider()
@@ -109,6 +124,7 @@ struct HomeView: View {
             Text(post.displayTitle)
         }
         .sensoryFeedback(.success, trigger: store.receipts.count) { old, new in new > old }
+        .sensoryFeedback(.success, trigger: store.syndicated)
     }
 
     /// Editable posts open in the composer. Others open on the site.

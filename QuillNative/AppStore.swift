@@ -244,6 +244,32 @@ final class AppStore {
         } catch { self.error = error.localizedDescription }
     }
 
+    /// Whether a published post can be sent to more of the server's syndication targets.
+    func syndicationTargets(for post: Post) -> [SyndicationTarget] {
+        guard !post.isDraft, account?.permits("update") == true else { return [] }
+        return post.unsyndicated(config.targets)
+    }
+
+    /// Asks the site to syndicate a published post, then reads the post again for its new links.
+    func syndicate(_ post: Post, to target: SyndicationTarget) async {
+        guard let client else { return }
+        guard account?.permits("update") == true else { self.error = "Your site didn’t grant permission to update posts. Sign in again."; return }
+        do {
+            try await client.syndicate(post.url, to: [target.uid], preferences: preferences)
+            syndicated += 1
+        } catch { self.error = error.localizedDescription; return }
+        // Some servers syndicate in the background, so the link may appear only on a later sync.
+        guard var fresh = try? await client.post(post.url), let index = library.posts.firstIndex(where: { $0.id == post.id }) else { return }
+        let old = library.posts[index]
+        if fresh.needsCite, old.target == fresh.target { fresh.citeAuthor = old.citeAuthor; fresh.citeText = old.citeText }
+        if fresh.photo == nil { fresh.photo = old.photo; fresh.photoAlt = old.photoAlt }
+        if fresh.published == nil { fresh.published = old.published }
+        library.posts[index] = fresh
+        saveLibrary()
+    }
+    /// Counts syndication requests the site accepted, for haptic feedback.
+    var syndicated = 0
+
     /// Signs out here, and asks the site to revoke the token when it offers a way to.
     func signOut() async {
         guard let account else { return }

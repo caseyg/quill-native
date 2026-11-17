@@ -177,6 +177,18 @@ public struct MicropubClient {
         let data = try await query("source", parameters: ["url": url.absoluteString, "p3k-content-type": "text/markdown"])
         return try Draft(source: JSONDecoder().decode(JSONValue.self, from: data), url: url)
     }
+    /// Asks the server to copy a published post to more syndication targets, with a Micropub update that adds them.
+    public func syndicate(_ url: URL, to targets: [String], preferences: Preferences = Preferences()) async throws {
+        var req = request(endpoint, method: "POST")
+        req.httpBody = try Payload.syndicate(url, to: targets, preferences: preferences).encoded()
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        let (_, response) = try await transport(req); try Network.check(response)
+    }
+    /// A post as the server lists it, to pick up changes such as new syndication links.
+    public func post(_ url: URL) async throws -> Post? {
+        let data = try await query("source", parameters: ["url": url.absoluteString])
+        return Post(mf2: try JSONDecoder().decode(JSONValue.self, from: data), url: url)
+    }
     public func delete(_ url: URL) async throws {
         var req = request(endpoint, method: "POST")
         req.httpBody = try JSONValue.object(["action": .string("delete"), "url": .string(url.absoluteString)]).encoded()
