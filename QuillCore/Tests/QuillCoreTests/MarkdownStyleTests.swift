@@ -38,6 +38,35 @@ final class MarkdownStyleTests: XCTestCase {
         XCTAssertEqual(text(source, .strong), ["**bold**"])
     }
 
+    /// cmark gives inline columns on a paragraph's later lines as if they were indented like its first,
+    /// which is wrong for lazy lines after a list item or quote, and for indented continuation lines.
+    func testLaterLinesOfAParagraphKeepTheirOwnIndent() {
+        for (source, marks) in [
+            ("- item\n**strong** x", ["- ", "**", "**"]),
+            ("> quote\n**strong** x", ["> ", "**", "**"]),
+            ("> quote\n>   **strong** x", ["> ", ">   ", "**", "**"]),
+            ("para\n  **x**", ["**", "**"]),
+            ("1. a\n   b **c**\nlazy **d**", ["1. ", "**", "**", "**", "**"]),
+            ("  - x\n    - y\n**z**", ["- ", "- ", "**", "**"]),
+            ("- item\n**strong*soft [site](https://a.example/)***", ["- ", "**", "*", "[", "](https://a.example/)", "*", "**"]),
+        ] {
+            XCTAssertEqual(text(source, .marker).sorted(), marks.sorted(), source)
+        }
+        XCTAssertEqual(text("- item\nlazy **bold** end", .strong), ["**bold**"])
+        XCTAssertEqual(text("- item\nsee [it](https://a.example/)", .link), ["[it](https://a.example/)"])
+    }
+
+    /// cmark gives emphasis that closes together with its parent the parent's end; the markers stay apart.
+    func testNestedEmphasisClosingTogether() {
+        XCTAssertEqual(text("**a*b***", .emphasis), ["*b*"])
+        XCTAssertEqual(text("**a*b***", .marker).sorted(), ["*", "*", "**", "**"])
+        XCTAssertEqual(text("***a***", .strong), ["**a**"])
+        XCTAssertEqual(text("***a***", .marker).sorted(), ["*", "*", "**", "**"])
+        XCTAssertEqual(text("*a **b***", .strong), ["**b**"])
+        XCTAssertEqual(text("~~gone~~ and ~one~", .strikethrough), ["~~gone~~", "~one~"])
+        XCTAssertEqual(text("~~gone~~ and ~one~", .marker), ["~~", "~~", "~", "~"])
+    }
+
     func testPlainTextHasNoSpans() {
         XCTAssertEqual(MarkdownStyle.spans(in: "Just words.\nMore words."), [])
         XCTAssertEqual(MarkdownStyle.spans(in: ""), [])

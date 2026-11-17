@@ -38,19 +38,27 @@ private struct Locator {
         self.lines = lines; self.starts = starts; length = source.utf16.count
     }
 
-    func offset(_ location: SourceLocation) -> Int {
+    /// `block` is the start of the paragraph or heading an inline node is in. cmark gives inline columns
+    /// on that block's later lines as if each line's text began at the block's first column, so those are
+    /// moved to where the line's text really begins: after any `>` markers and indent.
+    func offset(_ location: SourceLocation, in block: SourceLocation? = nil) -> Int {
         let line = location.line - 1
         guard line >= 0 else { return 0 }
         guard line < lines.count else { return length }
         let text = lines[line]
-        let bytes = min(max(0, location.column - 1), text.utf8.count)
+        var column = location.column
+        if let block, location.line > block.line {
+            let indent = text.utf8.prefix { $0 == UInt8(ascii: " ") || $0 == UInt8(ascii: "\t") || $0 == UInt8(ascii: ">") }.count
+            column = indent + 1 + (location.column - block.column)
+        }
+        let bytes = min(max(0, column - 1), text.utf8.count)
         let index = text.utf8.index(text.utf8.startIndex, offsetBy: bytes)
         return min(length, starts[line] + text.utf16.distance(from: text.startIndex, to: index))
     }
 
-    func range(_ range: SourceRange?) -> NSRange? {
+    func range(_ range: SourceRange?, in block: SourceLocation? = nil) -> NSRange? {
         guard let range else { return nil }
-        let start = offset(range.lowerBound), end = offset(range.upperBound)
+        let start = offset(range.lowerBound, in: block), end = offset(range.upperBound, in: block)
         return end > start ? NSRange(location: start, length: end - start) : nil
     }
 }
@@ -59,10 +67,44 @@ private struct Walker: MarkupWalker {
     let text: NSString
     let locator: Locator
     var spans: [MarkdownSpan] = []
+    /// Where the paragraph or heading being walked starts, to correct its inline positions.
+    private var block: SourceLocation?
+    /// The inside of the emphasis being walked. cmark can give a nested emphasis the same end as its
+    /// parent when they close together, as in `**a *b***`, so children are kept within this.
+    private var inside: NSRange?
 
     init(source: String) { text = source as NSString; locator = Locator(source) }
 
-    private func range(_ markup: Markup) -> NSRange? { locator.range(markup.range) }
+    private func range(_ markup: Markup) -> NSRange? {
+        guard let found = locator.range(markup.range, in: markup is InlineMarkup ? block : nil) else { return nil }
+        guard let inside else { return found }
+        let clamped = NSIntersectionRange(found, inside)
+        return clamped.length > 0 ? clamped : nil
+    }
+
+    /// Bold, italic and strikethrough: `count` delimiter characters at each end, styled between.
+    private mutating func delimited(_ kind: MarkdownSpan.Kind, _ markup: Markup, count: (NSString) -> Int) {
+        guard let r = range(markup) else { return descendInto(markup) }
+        spans.append(MarkdownSpan(kind, r))
+        let n = count(text.substring(with: r) as NSString)
+        guard n > 0, r.length > n * 2 else { return descendInto(markup) }
+        mark(r.location, r.location + n)
+        mark(NSMaxRange(r) - n, NSMaxRange(r))
+        let outer = inside
+        inside = NSRange(location: r.location + n, length: r.length - n * 2)
+        descendInto(markup)
+        inside = outer
+    }
+
+    /// Walks a block's inline children, with their positions corrected for the block's later lines.
+    private mutating func descendInline(_ markup: Markup) {
+        let outer = block
+        block = markup.range?.lowerBound
+        descendInto(markup)
+        block = outer
+    }
+
+    mutating func visitParagraph(_ paragraph: Paragraph) { descendInline(paragraph) }
 
     /// The part of a node not covered by its children: the syntax around them.
     private mutating func markOutside(_ markup: Markup) {
@@ -84,11 +126,18 @@ private struct Walker: MarkupWalker {
     }
 
     mutating func visitHeading(_ heading: Heading) {
-        styled(.heading(heading.level), heading); markOutside(heading); descendInto(heading)
+        styled(.heading(heading.level), heading)
+        let outer = block
+        block = heading.range?.lowerBound
+        markOutside(heading)
+        block = outer
+        descendInline(heading)
     }
-    mutating func visitStrong(_ strong: Strong) { styled(.strong, strong); markOutside(strong); descendInto(strong) }
-    mutating func visitEmphasis(_ emphasis: Emphasis) { styled(.emphasis, emphasis); markOutside(emphasis); descendInto(emphasis) }
-    mutating func visitStrikethrough(_ strikethrough: Strikethrough) { styled(.strikethrough, strikethrough); markOutside(strikethrough); descendInto(strikethrough) }
+    mutating func visitStrong(_ strong: Strong) { delimited(.strong, strong) { _ in 2 } }
+    mutating func visitEmphasis(_ emphasis: Emphasis) { delimited(.emphasis, emphasis) { _ in 1 } }
+    mutating func visitStrikethrough(_ strikethrough: Strikethrough) {
+        delimited(.strikethrough, strikethrough) { source in (source as String).prefix { $0 == "~" }.count }
+    }
     mutating func visitLink(_ link: Link) { styled(.link, link); markOutside(link); descendInto(link) }
     mutating func visitImage(_ image: Image) { styled(.link, image); markOutside(image) }
     mutating func visitThematicBreak(_ thematicBreak: ThematicBreak) { styled(.marker, thematicBreak) }
