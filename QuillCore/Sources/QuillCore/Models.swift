@@ -62,6 +62,8 @@ public struct Attachment: Codable, Identifiable, Equatable, Sendable {
     public init(data: Data, filename: String, mimeType: String, alt: String = "") {
         self.data = data; self.filename = filename; self.mimeType = mimeType; self.alt = alt
     }
+    /// A voice recording, sent as `audio` rather than `photo`.
+    public var isAudio: Bool { mimeType.hasPrefix("audio/") }
 }
 public struct Leg: Codable, Identifiable, Equatable, Sendable {
     public var id = UUID()

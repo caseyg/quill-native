@@ -16,5 +16,7 @@
 <key>CFBundleURLTypes</key><array><dict><key>CFBundleURLName</key><string>com.quillnative.app</string><key>CFBundleURLSchemes</key><array><string>quill-native</string></array></dict></array>
 <key>NSLocationWhenInUseUsageDescription</key><string>Adds your location to a post.</string>
 <key>NSCameraUsageDescription</key><string>Takes a photo for a post.</string>
+<key>NSMicrophoneUsageDescription</key><string>Records voice notes.</string>
+<key>NSSpeechRecognitionUsageDescription</key><string>Turns voice notes into text on this iPhone.</string>
 <key>NSAppTransportSecurity</key><dict><key>NSAllowsLocalNetworking</key><true/></dict>
 </dict></plist>

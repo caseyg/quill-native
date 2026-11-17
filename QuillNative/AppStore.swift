@@ -25,6 +25,8 @@ final class AppStore {
     /// The on-screen element the composer zooms out of: a draft row, or the compose button.
     var composerSource = AppStore.composeSource
     var showSettings = false
+    /// Opens the next composer straight into recording.
+    var startsVoiceNote = false
     var error: String?
     var busy = false
     let auth = AuthService()
@@ -281,6 +283,11 @@ final class AppStore {
         composer = draft
     }
 
+    func composeVoiceNote() {
+        compose(.note)
+        startsVoiceNote = true
+    }
+
     func open(_ draft: Draft) {
         composerSource = draft.id.uuidString
         composer = draft
@@ -339,6 +346,7 @@ final class AppStore {
 
     func handle(_ url: URL) {
         if url.host == "settings" { showSettings = account != nil; return }
+        if url.host == "voice" { composeVoiceNote(); return }
         reloadDrafts()
         let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
         let values = Dictionary((components?.queryItems ?? []).map { ($0.name, $0.value ?? "") }, uniquingKeysWith: { first, _ in first })
@@ -358,7 +366,7 @@ extension Post {
         text = draft.isHTML ? HTML.text(draft.content) : (draft.fields["p3k-content-type"] == "text/markdown" ? Markdown.text(draft.content) : draft.content)
         target = draft.target
         categories = draft.tags.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
-        if let photo = draft.attachments.first { self.photo = photo.remoteURL; photoAlt = photo.alt }
+        if let photo = draft.attachments.first(where: { !$0.isAudio }) { self.photo = photo.remoteURL; photoAlt = photo.alt }
         published = ISO8601DateFormatter().date(from: draft.published) ?? Date()
         isDraft = draft.remoteDraft
     }

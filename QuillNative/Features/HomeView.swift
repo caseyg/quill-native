@@ -24,7 +24,7 @@ struct HomeView: View {
                 Section("Drafts") {
                     ForEach(drafts) { draft in
                         Button { store.open(draft) } label: {
-                            PostRow(symbol: draft.kind.symbol, title: draft.displayTitle, date: draft.modified, photo: draft.attachments.first.map { Thumbnail.local($0.data) })
+                            PostRow(symbol: draft.kind.symbol, title: draft.displayTitle, date: draft.modified, photo: draft.attachments.first { !$0.isAudio }.map { Thumbnail.local($0.data) })
                         }
                         .zoomSource(draft.id.uuidString, in: zoom)
                         .swipeActions {
@@ -141,6 +141,7 @@ struct HomeView: View {
                 Button { store.compose(kind) } label: { Label(kind.title, systemImage: kind.symbol) }
             }
             Divider()
+            Button { store.composeVoiceNote() } label: { Label("Voice Note", systemImage: "mic") }
             Button { askingForURL = true } label: { Label("Edit Post…", systemImage: "pencil.line") }
         } label: {
             Label("New Post", systemImage: "square.and.pencil")

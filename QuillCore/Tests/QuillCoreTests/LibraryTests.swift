@@ -195,6 +195,31 @@ final class MarkdownTests: XCTestCase {
         draft.format = .plain
         XCTAssertEqual(draft.format, .plain)
     }
+    func testRecordingsGoInTheAudioProperty() throws {
+        var draft = Draft(kind: .note); draft.content = "Said aloud"
+        var audio = Attachment(data: Data(), filename: "v.m4a", mimeType: "audio/mp4"); audio.remoteURL = URL(string: "https://example.com/v.m4a")
+        var photo = Attachment(data: Data(), filename: "a.jpg", mimeType: "image/jpeg"); photo.remoteURL = URL(string: "https://example.com/a.jpg")
+        draft.attachments = [audio, photo]
+        let p = try Payload.create(draft).object?["properties"]?.object
+        XCTAssertEqual(p?["audio"], .array([.string("https://example.com/v.m4a")]))
+        XCTAssertEqual(p?["photo"], .array([.string("https://example.com/a.jpg")]))
+    }
+    func testARecordingAloneIsNotAPhoto() {
+        var draft = Draft(kind: .photo); draft.attachments = [Attachment(data: Data(), filename: "v.m4a", mimeType: "audio/mp4")]
+        XCTAssertThrowsError(try Payload.validate(draft))
+    }
+    func testRecordingsUploadAsAudioInMultipart() async throws {
+        let body = Box()
+        let client = MicropubClient(endpoint: URL(string: "https://example.com/micropub")!, token: "t", transport: { req in
+            body.value = String(decoding: req.httpBody ?? Data(), as: UTF8.self)
+            return (Data(), HTTPURLResponse(url: req.url!, statusCode: 201, httpVersion: nil, headerFields: ["Location": "https://example.com/1"])!)
+        })
+        var draft = Draft(kind: .note); draft.content = "Hi"
+        draft.attachments = [Attachment(data: Data("x".utf8), filename: "v.m4a", mimeType: "audio/mp4")]
+        _ = try await client.create(draft)
+        XCTAssertTrue(body.value.contains(#"name="audio[0]""#) || body.value.contains(#"name="audio""#), body.value)
+        XCTAssertFalse(body.value.contains("photo["))
+    }
     func testHTMLNoteSendsHTMLContent() throws {
         var draft = Draft(kind: .note); draft.content = "<p>Hi</p>"; draft.format = .html
         let p = try Payload.create(draft).object?["properties"]?.object
@@ -250,3 +275,5 @@ final class Counter: @unchecked Sendable {
     func add() { lock.lock(); count += 1; lock.unlock() }
     var value: Int { lock.lock(); defer { lock.unlock() }; return count }
 }
+
+final class Box: @unchecked Sendable { var value = "" }
