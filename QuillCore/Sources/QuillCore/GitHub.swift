@@ -37,9 +37,15 @@ public enum GitHubDeviceFlow {
         var interval = code.interval
         while Date() < code.expires {
             try await Task.sleep(for: .seconds(interval))
-            let value = try await post("https://github.com/login/oauth/access_token", [
-                "client_id": clientID, "device_code": code.deviceCode, "grant_type": "urn:ietf:params:oauth:grant-type:device_code",
-            ])
+            let value: [String: JSONValue]
+            do {
+                value = try await post("https://github.com/login/oauth/access_token", [
+                    "client_id": clientID, "device_code": code.deviceCode, "grant_type": "urn:ietf:params:oauth:grant-type:device_code",
+                ])
+            } catch let error as URLError where transient.contains(error.code) {
+                // The app was in the background while the person approved on GitHub, which drops the connection. Ask again.
+                continue
+            }
             if let token = value["access_token"]?.string, !token.isEmpty { return token }
             switch value["error"]?.string {
             case "authorization_pending": continue
@@ -51,6 +57,8 @@ public enum GitHubDeviceFlow {
         }
         throw QuillError("The code expired. Try again.")
     }
+
+    private static let transient: Set<URLError.Code> = [.networkConnectionLost, .timedOut, .notConnectedToInternet, .cannotConnectToHost, .cannotFindHost, .dnsLookupFailed]
 
     private static func number(_ value: JSONValue?) -> Int? {
         if case .number(let n) = value { return Int(n) }
