@@ -1,14 +1,22 @@
 import SwiftUI
 import UIKit
 
+/// An editor that can take the composer's formatting commands.
+@MainActor protocol FormattingTarget: AnyObject {
+    func bold()
+    func italic()
+    func heading()
+    func link(_ url: URL)
+}
+
 /// Formatting commands for the article editor, sent from the composer's action bar.
 @MainActor @Observable
 final class RichTextController {
-    @ObservationIgnored fileprivate weak var coordinator: RichEditor.Coordinator?
-    func bold() { coordinator?.toggle(.traitBold) }
-    func italic() { coordinator?.toggle(.traitItalic) }
-    func heading() { coordinator?.heading() }
-    func link(_ url: URL) { coordinator?.link(url) }
+    @ObservationIgnored weak var target: FormattingTarget?
+    func bold() { target?.bold() }
+    func italic() { target?.italic() }
+    func heading() { target?.heading() }
+    func link(_ url: URL) { target?.link(url) }
 }
 
 struct RichEditor: UIViewRepresentable {
@@ -29,7 +37,7 @@ struct RichEditor: UIViewRepresentable {
         view.accessibilityLabel = "Article"
         view.accessibilityIdentifier = "article.content"
         context.coordinator.view = view
-        controller.coordinator = context.coordinator
+        controller.target = context.coordinator
         updateUIView(view, context: context)
         return view
     }
@@ -49,7 +57,7 @@ struct RichEditor: UIViewRepresentable {
     }
 
     @MainActor
-    final class Coordinator: NSObject, UITextViewDelegate {
+    final class Coordinator: NSObject, UITextViewDelegate, FormattingTarget {
         var parent: RichEditor
         weak var view: UITextView?
         var lastHTML: String?
@@ -66,6 +74,9 @@ struct RichEditor: UIViewRepresentable {
         func textViewDidChangeSelection(_ textView: UITextView) {
             if textView.isFirstResponder { selection = textView.selectedRange }
         }
+
+        func bold() { toggle(.traitBold) }
+        func italic() { toggle(.traitItalic) }
 
         func toggle(_ trait: UIFontDescriptor.SymbolicTraits) {
             guard let view else { return }

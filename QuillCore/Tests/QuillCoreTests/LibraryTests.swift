@@ -179,10 +179,10 @@ final class MarkdownTests: XCTestCase {
         XCTAssertEqual(again.format(for: .article), .html)
         XCTAssertEqual(again.format(for: .note), .markdown)
     }
-    func testPlainDefaultKeepsArticlesRich() {
+    func testPlainDefaultWritesArticlesInMarkdown() {
         var draft = Draft(kind: .note)
         draft.prepare(for: .article, preferences: Preferences())
-        XCTAssertTrue(draft.isHTML)
+        XCTAssertEqual(draft.format, .markdown)
         draft.prepare(for: .note, preferences: Preferences())
         XCTAssertEqual(draft.format, .plain)
     }
