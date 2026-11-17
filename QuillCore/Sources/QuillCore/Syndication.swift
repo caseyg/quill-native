@@ -51,10 +51,16 @@ public extension Post {
 
 public extension Payload {
     /// A Micropub update that asks the server to syndicate a published post to more targets.
-    static func syndicate(_ url: URL, to targets: [String], preferences: Preferences = Preferences()) throws -> JSONValue {
+    /// The targets go at the top level, beside `action`, as servers read commands there rather than in `add`.
+    /// `texts` holds the text written for each target, keyed by uid, as `mp-syndicate-text`. Servers that
+    /// don't know it write their own text.
+    static func syndicate(_ url: URL, to targets: [String], texts: [String: String] = [:], preferences: Preferences = Preferences()) throws -> JSONValue {
         guard !targets.isEmpty else { throw QuillError("Choose where to syndicate.") }
-        return .object(["action": .string("update"), "url": .string(url.absoluteString),
-                        "add": .object([preferences.syndicationField: .array(targets.map(JSONValue.string))])])
+        var body: [String: JSONValue] = ["action": .string("update"), "url": .string(url.absoluteString),
+                                         preferences.syndicationField: .array(targets.map(JSONValue.string))]
+        let written = texts.filter { targets.contains($0.key) && !$0.value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        if !written.isEmpty { body["mp-syndicate-text"] = .object(written.mapValues(JSONValue.string)) }
+        return .object(body)
     }
 }
 

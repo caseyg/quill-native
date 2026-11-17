@@ -38,16 +38,19 @@ final class SyndicationTests: XCTestCase {
             let body = try JSONDecoder().decode(JSONValue.self, from: request.httpBody ?? Data()).object
             XCTAssertEqual(body?["action"]?.string, "update")
             XCTAssertEqual(body?["url"]?.string, "https://example.com/1")
-            XCTAssertEqual(body?["add"]?.object?["mp-syndicate-to"]?.array?.compactMap(\.string), ["https://hachyderm.io/@me"])
+            XCTAssertEqual(body?["mp-syndicate-to"]?.array?.compactMap(\.string), ["https://hachyderm.io/@me"])
+            XCTAssertEqual(body?["mp-syndicate-text"]?.object?["https://hachyderm.io/@me"]?.string, "Hello @a@b.example")
+            XCTAssertNil(body?["add"])
             return (Data(), HTTPURLResponse(url: endpoint, statusCode: 204, httpVersion: nil, headerFields: nil)!)
         })
-        try await client.syndicate(URL(string: "https://example.com/1")!, to: ["https://hachyderm.io/@me"])
+        try await client.syndicate(URL(string: "https://example.com/1")!, to: ["https://hachyderm.io/@me"], texts: ["https://hachyderm.io/@me": "Hello @a@b.example", "unchosen": "x"])
     }
 
     func testSyndicateUsesTheChosenField() throws {
         var preferences = Preferences(); preferences.syndicationField = "syndicate-to"
         let body = try Payload.syndicate(URL(string: "https://example.com/1")!, to: ["a"], preferences: preferences).object
-        XCTAssertNotNil(body?["add"]?.object?["syndicate-to"])
+        XCTAssertNotNil(body?["syndicate-to"])
+        XCTAssertNil(body?["mp-syndicate-text"])
     }
 
     func testDraftLinksToItsFileOnGitHub() {

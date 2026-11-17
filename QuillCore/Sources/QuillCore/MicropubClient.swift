@@ -3,8 +3,12 @@ import Foundation
 public struct SyndicationTarget: Codable, Identifiable, Equatable, Sendable {
     public var uid: String
     public var name: String
+    /// The service, from the target's `service` object, such as "Bluesky".
+    public var service: String?
+    /// The account the server posts as, from the target's `user` object.
+    public var user: URL?
     public var id: String { uid }
-    public init(uid: String, name: String) { self.uid = uid; self.name = name }
+    public init(uid: String, name: String, service: String? = nil, user: URL? = nil) { self.uid = uid; self.name = name; self.service = service; self.user = user }
 }
 public struct ServerConfig: Decodable, Sendable {
     public var mediaEndpoint: URL?
@@ -18,7 +22,9 @@ public struct ServerConfig: Decodable, Sendable {
         mediaEndpoint = value["media-endpoint"]?.string.flatMap { try? WebURL.parse($0) }
         targets = (value["syndicate-to"]?.array ?? []).compactMap { item in
             guard let o = item.object, let uid = o["uid"]?.string ?? o["target"]?.string else { return nil }
-            return SyndicationTarget(uid: uid, name: o["name"]?.string ?? o["target"]?.string ?? uid)
+            return SyndicationTarget(uid: uid, name: o["name"]?.string ?? o["target"]?.string ?? uid,
+                                     service: o["service"]?.object?["name"]?.string ?? o["service"]?.string,
+                                     user: (o["user"]?.object?["url"]?.string).flatMap { try? WebURL.parse($0) })
         }
         channels = (value["channels"]?.array ?? []).compactMap { $0.string ?? $0.object?["uid"]?.string }
         visibility = (value["visibility"]?.array ?? []).compactMap(\.string)
@@ -178,9 +184,9 @@ public struct MicropubClient {
         return try Draft(source: JSONDecoder().decode(JSONValue.self, from: data), url: url)
     }
     /// Asks the server to copy a published post to more syndication targets, with a Micropub update that adds them.
-    public func syndicate(_ url: URL, to targets: [String], preferences: Preferences = Preferences()) async throws {
+    public func syndicate(_ url: URL, to targets: [String], texts: [String: String] = [:], preferences: Preferences = Preferences()) async throws {
         var req = request(endpoint, method: "POST")
-        req.httpBody = try Payload.syndicate(url, to: targets, preferences: preferences).encoded()
+        req.httpBody = try Payload.syndicate(url, to: targets, texts: texts, preferences: preferences).encoded()
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         let (_, response) = try await transport(req); try Network.check(response)
     }
