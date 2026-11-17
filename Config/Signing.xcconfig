@@ -4,4 +4,7 @@ REGISTER_APP_GROUPS = YES
 // The public page that identifies this app to IndieAuth servers (docs/index.html, served by GitHub Pages).
 // A fork should point this at a page it hosts. "/$()/" keeps "//" from starting a comment.
 QUILL_CLIENT_ID = https:/$()/caseyg.github.io/quill-native/
+// The public client ID of a GitHub OAuth app with Device Flow enabled, for Settings → Drafts on GitHub.
+// Empty means people sign in to GitHub with a token instead. Client IDs are not secret; no client secret is used.
+QUILL_GITHUB_CLIENT_ID =
 #include? "Signing.local.xcconfig"

@@ -253,6 +253,20 @@ final class QuillNativeUITests: XCTestCase {
         XCTAssertTrue(app.buttons["compose"].waitForExistence(timeout: 5))
     }
 
+    /// Drafts on GitHub starts off, with a way to sign in.
+    func testGitHubDraftsStartsSignedOut() {
+        let app = launch()
+        XCTAssertTrue(app.buttons["settings"].waitForExistence(timeout: 5))
+        app.buttons["settings"].tap()
+        let github = app.buttons["settings.github"]
+        XCTAssertTrue(github.waitForExistence(timeout: 5))
+        github.tap()
+        XCTAssertTrue(app.buttons["github.token"].waitForExistence(timeout: 5))
+        app.buttons["github.token"].tap()
+        XCTAssertTrue(app.secureTextFields["github.tokenfield"].waitForExistence(timeout: 5))
+        app.buttons["Cancel"].tap()
+    }
+
     func testShareExtensionSavesURLDraft() {
         let safari = XCUIApplication(bundleIdentifier: "com.apple.mobilesafari")
         safari.terminate()
