@@ -444,7 +444,23 @@ public extension Draft {
         if kind == .code { fields["language"] = format.replacingOccurrences(of: "code/", with: "") }
         else if !format.isEmpty { fields["p3k-content-type"] = format }
         published = MF2.text(p["published"])
+        if kind.hasPhotoProperty {
+            attachments = (p["photo"]?.array ?? []).compactMap { value in
+                guard let link = value.string ?? value.object?["value"]?.string, let url = URL(string: link) else { return nil }
+                var photo = Attachment(data: Data(), filename: url.lastPathComponent, mimeType: "image/jpeg", alt: value.object?["alt"]?.string ?? "")
+                photo.remoteURL = url
+                return photo
+            }
+        }
         original = editableValues
+    }
+
+    /// Uploaded photos as the `photo` property: a URL, or a URL with its description.
+    var photoProperty: [JSONValue] {
+        attachments.compactMap { attachment in
+            guard !attachment.isAudio, let url = attachment.remoteURL else { return nil }
+            return attachment.alt.isEmpty ? .string(url.absoluteString) : .object(["value": .string(url.absoluteString), "alt": .string(attachment.alt)])
+        }
     }
 
     /// The values an update compares against the post as fetched.
@@ -452,6 +468,10 @@ public extension Draft {
         var values = ["name": title, "category": tags]
         if kind.targetProperty == nil || kind.hasEditableText { values["content"] = content }
         if let key = kind.targetProperty { values[key] = target }
+        // Photos compare in order, so a reordered or redescribed photo counts as a change.
+        if kind.hasPhotoProperty {
+            values["photo"] = attachments.filter { !$0.isAudio }.map { "\($0.remoteURL?.absoluteString ?? $0.id.uuidString)\u{1F}\($0.alt)" }.joined(separator: "\n")
+        }
         return values
     }
 }
@@ -467,4 +487,6 @@ extension PostKind {
         }
     }
     var hasEditableText: Bool { [.reply, .bookmark].contains(self) }
+    /// Kinds whose photos are a `photo` property; an article's sit in its content instead.
+    public var hasPhotoProperty: Bool { [.note, .photo, .reply, .bookmark].contains(self) }
 }
