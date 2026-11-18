@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Long-press shortcuts on the launcher icon. Recent drafts are added at runtime. -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut android:shortcutId="new-note" android:enabled="true"
+        android:icon="@drawable/ic_shortcut_draft"
+        android:shortcutShortLabel="@string/shortcut_note"
+        android:shortcutLongLabel="@string/shortcut_note">
+        <intent android:action="android.intent.action.VIEW"
+            android:data="quill-native://note"
+            android:targetPackage="com.quillnative.android"
+            android:targetClass="com.quillnative.android.MainActivity" />
+    </shortcut>
+    <shortcut android:shortcutId="voice-note" android:enabled="true"
+        android:icon="@drawable/ic_shortcut_voice"
+        android:shortcutShortLabel="@string/shortcut_voice"
+        android:shortcutLongLabel="@string/shortcut_voice">
+        <intent android:action="android.intent.action.VIEW"
+            android:data="quill-native://voice"
+            android:targetPackage="com.quillnative.android"
+            android:targetClass="com.quillnative.android.MainActivity" />
+    </shortcut>
+</shortcuts>
