@@ -13,7 +13,6 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
-import androidx.compose.foundation.ExperimentalLayoutApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -144,7 +143,7 @@ class ShareActivity : ComponentActivity() {
 private val shareKinds = listOf(PostKind.BOOKMARK, PostKind.NOTE, PostKind.PHOTO, PostKind.REPLY, PostKind.LIKE, PostKind.REPOST)
 private val PostKind.hasWords get() = this in setOf(PostKind.NOTE, PostKind.PHOTO, PostKind.REPLY, PostKind.BOOKMARK)
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ShareSheet(store: AppStore, initial: Draft?, onFinish: () -> Unit) {
     val scope = rememberCoroutineScope()

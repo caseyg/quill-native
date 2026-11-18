@@ -236,6 +236,7 @@ fun AdvancedScreen(store: AppStore, pop: () -> Unit) {
 }
 
 /** Signing in to GitHub, picking a repository, and the state of copying drafts there. */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GitHubScreen(store: AppStore, push: (Screen) -> Unit, pop: () -> Unit) {
     val github = store.github
@@ -397,6 +398,7 @@ private fun TokenDialog(store: AppStore, onDismiss: () -> Unit) {
 }
 
 /** Repositories the person can write to. A public one is confirmed first, since anyone can read what's in it. */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RepositoryScreen(store: AppStore, pop: () -> Unit) {
     val scope = rememberCoroutineScope()
