@@ -1,5 +1,6 @@
 import SwiftUI
 import PhotosUI
+import UniformTypeIdentifiers
 import QuillCore
 
 struct ComposerView: View {
@@ -22,8 +23,8 @@ struct ComposerView: View {
     @State private var showPhotos = false
     @State private var recordingVoice = false
     @State private var htmlSource = false
-    @State private var describing: Attachment.ID?
-    @State private var descriptionText = ""
+    @State private var describing: Attachment?
+    @State private var dragging: Attachment.ID?
     @State private var addingLink = false
     @State private var linkText = ""
     @FocusState private var focus: Field?
@@ -75,12 +76,11 @@ struct ComposerView: View {
                     .environment(store)
                     .presentationDetents([.medium, .large])
             }
-            .alert("Description", isPresented: Binding(get: { describing != nil }, set: { if !$0 { describing = nil } })) {
-                TextField("Description", text: $descriptionText)
-                Button("Cancel", role: .cancel) {}
-                Button("Save") {
-                    if let index = draft.attachments.firstIndex(where: { $0.id == describing }) { draft.attachments[index].alt = descriptionText }
+            .sheet(item: $describing) { attachment in
+                PhotoDescriptionEditor(attachment: attachment) { text in
+                    if let index = draft.attachments.firstIndex(where: { $0.id == attachment.id }) { draft.attachments[index].alt = text }
                 }
+                .presentationDetents([.medium, .large])
             }
             .alert("Link", isPresented: $addingLink) {
                 TextField("URL", text: $linkText)
@@ -256,16 +256,27 @@ struct ComposerView: View {
         if !draft.attachments.isEmpty || importing {
             ScrollView(.horizontal) {
                 HStack(spacing: 10) {
+                    let photos = draft.attachments.filter { !$0.isAudio }
                     ForEach(draft.attachments) { attachment in
                         if attachment.isAudio {
                             AudioTile { withAnimation(.snappy) { draft.attachments.removeAll { $0.id == attachment.id } } }
                         } else {
-                        PhotoThumbnail(attachment: attachment) {
-                            descriptionText = attachment.alt
-                            describing = attachment.id
-                        } remove: {
-                            withAnimation(.snappy) { draft.attachments.removeAll { $0.id == attachment.id } }
-                        }
+                            let position = photos.firstIndex { $0.id == attachment.id } ?? 0
+                            PhotoThumbnail(
+                                attachment: attachment,
+                                number: position + 1,
+                                canMoveBack: position > 0,
+                                canMoveForward: position < photos.count - 1,
+                                describe: { describing = attachment },
+                                move: { step in movePhoto(attachment.id, by: step) },
+                                remove: { withAnimation(.snappy) { draft.attachments.removeAll { $0.id == attachment.id } } }
+                            )
+                            .opacity(dragging == attachment.id ? 0.4 : 1)
+                            .onDrag {
+                                dragging = attachment.id
+                                return NSItemProvider(object: attachment.id.uuidString as NSString)
+                            }
+                            .onDrop(of: [.text], delegate: PhotoDropDelegate(target: attachment.id, attachments: $draft.attachments, dragging: $dragging))
                         }
                     }
                     if importing { ProgressView().frame(width: 96, height: 96) }
@@ -337,7 +348,7 @@ struct ComposerView: View {
                 barButton("Voice Note", "mic") { focus = nil; recordingVoice = true }
                     .accessibilityIdentifier("voice")
             }
-            if draft.kind.takesPhotos && draft.editURL == nil {
+            if canAddPhotos {
                 barButton("Photo Library", "photo.on.rectangle") { showPhotos = true }
                 if UIImagePickerController.isSourceTypeAvailable(.camera) {
                     barButton("Take Photo", "camera") { showCamera = true }
@@ -387,6 +398,12 @@ struct ComposerView: View {
 
     private var sendTitle: String {
         draft.editURL != nil ? "Update" : (draft.remoteDraft ? "Save Draft" : "Post")
+    }
+
+    /// A published post takes new photos only where they are a `photo` property and can be uploaded first.
+    private var canAddPhotos: Bool {
+        guard draft.kind.takesPhotos else { return false }
+        return draft.editURL == nil || (draft.kind.hasPhotoProperty && store.config.mediaEndpoint != nil)
     }
 
     private var showsSyndication: Bool {
@@ -466,6 +483,14 @@ struct ComposerView: View {
         focus = .content
     }
 
+    /// Moves a photo past its neighbouring photo, stepping over any voice note between them.
+    private func movePhoto(_ id: Attachment.ID, by step: Int) {
+        let photoIndices = draft.attachments.indices.filter { !draft.attachments[$0].isAudio }
+        guard let position = photoIndices.firstIndex(where: { draft.attachments[$0].id == id }),
+              photoIndices.indices.contains(position + step) else { return }
+        withAnimation(.snappy) { draft.attachments.swapAt(photoIndices[position], photoIndices[position + step]) }
+    }
+
     private func attach(_ data: Data, name: String) {
         let attachment = Attachment(data: data, filename: "\(name)-\(UUID().uuidString.prefix(8)).jpg", mimeType: "image/jpeg")
         withAnimation(.snappy) { draft.attachments.append(attachment) }
@@ -507,7 +532,11 @@ struct ComposerView: View {
 
 private struct PhotoThumbnail: View {
     let attachment: Attachment
+    let number: Int
+    let canMoveBack: Bool
+    let canMoveForward: Bool
     let describe: () -> Void
+    let move: (Int) -> Void
     let remove: () -> Void
     @State private var image: UIImage?
 
@@ -533,8 +562,13 @@ private struct PhotoThumbnail: View {
             }
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(attachment.alt.isEmpty ? "Photo" : attachment.alt)
+        .accessibilityLabel(attachment.alt.isEmpty ? "Photo \(number)" : "Photo \(number): \(attachment.alt)")
         .accessibilityHint("Edits the description")
+        .accessibilityIdentifier("photo.\(number)")
+        .accessibilityActions {
+            if canMoveBack { Button("Move Earlier") { move(-1) } }
+            if canMoveForward { Button("Move Later") { move(1) } }
+        }
         .overlay(alignment: .topTrailing) {
             Button(action: remove) {
                 Image(systemName: "xmark")
@@ -542,23 +576,119 @@ private struct PhotoThumbnail: View {
                     .foregroundStyle(.white)
                     .frame(width: 22, height: 22)
                     .background(.black.opacity(0.6), in: Circle())
-                    .frame(width: 40, height: 40, alignment: .topTrailing)
-                    .padding(6)
+                    // The tap area stays in the corner, so a tap on the photo opens its description.
+                    .frame(width: 38, height: 38, alignment: .topTrailing)
+                    .padding(4)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Remove Photo")
+            .accessibilityLabel("Remove Photo \(number)")
         }
         .contextMenu {
-            Button(action: describe) { Label("Description", systemImage: "text.below.photo") }
+            Button(action: describe) { Label(attachment.alt.isEmpty ? "Add Description" : "Edit Description", systemImage: "text.below.photo") }
+            if canMoveBack { Button { move(-1) } label: { Label("Move Earlier", systemImage: "arrow.left") } }
+            if canMoveForward { Button { move(1) } label: { Label("Move Later", systemImage: "arrow.right") } }
             Button(role: .destructive, action: remove) { Label("Remove", systemImage: "trash") }
         }
         .animation(.snappy, value: attachment.alt.isEmpty)
         .transition(.scale(scale: 0.8).combined(with: .opacity))
-        .task(id: attachment.id) {
-            let data = attachment.data
-            image = await Task.detached { UIImage(data: data)?.preparingThumbnail(of: CGSize(width: 288, height: 288)) }.value
+        .task(id: attachment.id) { image = await attachment.thumbnail(side: 288) }
+    }
+}
+
+/// Moves the dragged photo into each spot it passes over, so the strip reorders as the finger moves.
+private struct PhotoDropDelegate: DropDelegate {
+    let target: Attachment.ID
+    @Binding var attachments: [Attachment]
+    @Binding var dragging: Attachment.ID?
+
+    func dropEntered(info: DropInfo) {
+        guard let dragging, dragging != target,
+              let from = attachments.firstIndex(where: { $0.id == dragging }),
+              let to = attachments.firstIndex(where: { $0.id == target }) else { return }
+        withAnimation(.snappy) { attachments.move(fromOffsets: IndexSet(integer: from), toOffset: to > from ? to + 1 : to) }
+    }
+    func dropUpdated(info: DropInfo) -> DropProposal? { DropProposal(operation: .move) }
+    func performDrop(info: DropInfo) -> Bool { dragging = nil; return true }
+    func dropExited(info: DropInfo) {}
+}
+
+/// A photo's description, written as a paragraph rather than squeezed into one line.
+private struct PhotoDescriptionEditor: View {
+    let attachment: Attachment
+    let save: (String) -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var text: String
+    @State private var image: UIImage?
+    @FocusState private var focused: Bool
+
+    init(attachment: Attachment, save: @escaping (String) -> Void) {
+        self.attachment = attachment
+        self.save = save
+        _text = State(initialValue: attachment.alt)
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    ZStack {
+                        Color(uiColor: .tertiarySystemFill)
+                        if let image { Image(uiImage: image).resizable().scaledToFit() }
+                    }
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 180)
+                    .clipShape(.rect(cornerRadius: 14))
+                    .accessibilityHidden(true)
+                    TextField("Describe what’s in the photo for people who can’t see it.", text: $text, axis: .vertical)
+                        .lineLimit(5...)
+                        .focused($focused)
+                        .padding(12)
+                        .background(.fill.tertiary, in: .rect(cornerRadius: 14))
+                        .accessibilityLabel("Description")
+                        .accessibilityIdentifier("description.text")
+                    Text("\(text.count) characters")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                }
+                .padding(20)
+            }
+            .scrollDismissesKeyboard(.interactively)
+            .navigationTitle("Description")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        save(text.trimmingCharacters(in: .whitespacesAndNewlines))
+                        dismiss()
+                    }
+                    .fontWeight(.semibold)
+                    .accessibilityIdentifier("description.save")
+                }
+            }
         }
+        .interactiveDismissDisabled(text != attachment.alt)
+        .onAppear { focused = true }
+        .task(id: attachment.id) { image = await attachment.thumbnail(side: 900) }
+    }
+}
+
+extension Attachment {
+    /// A small image of the photo, from its bytes or, for a published photo, from its URL.
+    func thumbnail(side: CGFloat) async -> UIImage? {
+        var data = self.data
+        if data.isEmpty, let url = remoteURL {
+            guard let (downloaded, _) = try? await URLSession.shared.data(from: url) else { return nil }
+            data = downloaded
+        }
+        let bytes = data
+        return await Task.detached {
+            guard let image = UIImage(data: bytes), image.size.width > 0, image.size.height > 0 else { return nil }
+            let scale = min(1, side / max(image.size.width, image.size.height))
+            return image.preparingThumbnail(of: CGSize(width: image.size.width * scale, height: image.size.height * scale))
+        }.value
     }
 }
 

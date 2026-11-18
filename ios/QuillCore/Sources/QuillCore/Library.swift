@@ -17,6 +17,11 @@ public struct Post: Codable, Identifiable, Equatable, Sendable {
     public var citeAuthor: String?
     /// The text of the post this one responds to.
     public var citeText: String?
+    /// Copies of the post on other sites, such as Bluesky or Mastodon, from its `syndication` property.
+    /// Optional so libraries saved before it was kept still load.
+    public var syndication: [URL]?
+    /// The social copy as a thread, from `syndication-thread`, for servers that store one.
+    public var thread: [String]?
     public var id: String { url.absoluteString }
 
     /// True until the responded-to page has been read. A page with nothing to show leaves empty strings.
@@ -70,6 +75,11 @@ public extension Post {
         }
         published = MF2.text(p["published"]).isEmpty ? nil : MF2.date(MF2.text(p["published"]))
         isDraft = MF2.text(p["post-status"]) == "draft" || p["draft"]?.array?.first == .bool(true)
+        let copies = (p["syndication"]?.array ?? []).compactMap { $0.string ?? $0.object?["value"]?.string ?? $0.object?["properties"]?.object?["url"]?.array?.first?.string }
+            .compactMap { try? WebURL.parse($0) }
+        syndication = copies.isEmpty ? nil : copies
+        let posts = (p["syndication-thread"]?.array ?? []).compactMap(\.string).filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        thread = posts.count > 1 ? posts : nil
     }
 }
 
@@ -444,7 +454,23 @@ public extension Draft {
         if kind == .code { fields["language"] = format.replacingOccurrences(of: "code/", with: "") }
         else if !format.isEmpty { fields["p3k-content-type"] = format }
         published = MF2.text(p["published"])
+        if kind.hasPhotoProperty {
+            attachments = (p["photo"]?.array ?? []).compactMap { value in
+                guard let link = value.string ?? value.object?["value"]?.string, let url = URL(string: link) else { return nil }
+                var photo = Attachment(data: Data(), filename: url.lastPathComponent, mimeType: "image/jpeg", alt: value.object?["alt"]?.string ?? "")
+                photo.remoteURL = url
+                return photo
+            }
+        }
         original = editableValues
+    }
+
+    /// Uploaded photos as the `photo` property: a URL, or a URL with its description.
+    var photoProperty: [JSONValue] {
+        attachments.compactMap { attachment in
+            guard !attachment.isAudio, let url = attachment.remoteURL else { return nil }
+            return attachment.alt.isEmpty ? .string(url.absoluteString) : .object(["value": .string(url.absoluteString), "alt": .string(attachment.alt)])
+        }
     }
 
     /// The values an update compares against the post as fetched.
@@ -452,6 +478,10 @@ public extension Draft {
         var values = ["name": title, "category": tags]
         if kind.targetProperty == nil || kind.hasEditableText { values["content"] = content }
         if let key = kind.targetProperty { values[key] = target }
+        // Photos compare in order, so a reordered or redescribed photo counts as a change.
+        if kind.hasPhotoProperty {
+            values["photo"] = attachments.filter { !$0.isAudio }.map { "\($0.remoteURL?.absoluteString ?? $0.id.uuidString)\u{1F}\($0.alt)" }.joined(separator: "\n")
+        }
         return values
     }
 }
@@ -467,4 +497,6 @@ extension PostKind {
         }
     }
     var hasEditableText: Bool { [.reply, .bookmark].contains(self) }
+    /// Kinds whose photos are a `photo` property; an article's sit in its content instead.
+    public var hasPhotoProperty: Bool { [.note, .photo, .reply, .bookmark].contains(self) }
 }

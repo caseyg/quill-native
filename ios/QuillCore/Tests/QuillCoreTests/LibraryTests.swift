@@ -127,6 +127,38 @@ final class LibraryTests: XCTestCase {
         XCTAssertNil(body["replace"]?.object?["name"])
     }
 
+    func testEditingKeepsPhotosAndSendsTheirNewOrderAndDescriptions() throws {
+        let source = JSONValue.object(["type": .array([.string("h-entry")]), "properties": .object([
+            "content": .array([.string("Two photos")]),
+            "photo": .array([.string("https://example.com/a.jpg"), .object(["value": .string("https://example.com/b.jpg"), "alt": .string("A dog")])]),
+        ])])
+        var draft = try Draft(source: source, url: URL(string: "https://example.com/1")!)
+        XCTAssertEqual(draft.attachments.map(\.remoteURL?.lastPathComponent), ["a.jpg", "b.jpg"])
+        XCTAssertEqual(draft.attachments.map(\.alt), ["", "A dog"])
+        XCTAssertThrowsError(try Payload.update(draft), "Nothing has changed yet")
+
+        draft.attachments.reverse()
+        draft.attachments[1].alt = "A cat\nasleep on a chair"
+        let body = try Payload.update(draft).object!
+        XCTAssertEqual(body["replace"]?.object?["photo"], .array([
+            .object(["value": .string("https://example.com/b.jpg"), "alt": .string("A dog")]),
+            .object(["value": .string("https://example.com/a.jpg"), "alt": .string("A cat\nasleep on a chair")]),
+        ]))
+        XCTAssertNil(body["replace"]?.object?["content"])
+
+        draft.attachments.removeAll()
+        XCTAssertEqual(try Payload.update(draft).object?["delete"], .array([.string("photo")]))
+    }
+
+    func testAddedPhotoNeedsUploadingBeforeAnUpdate() throws {
+        let source = JSONValue.object(["properties": .object(["content": .array([.string("Hi")])])])
+        var draft = try Draft(source: source, url: URL(string: "https://example.com/1")!)
+        draft.attachments.append(Attachment(data: Data([1]), filename: "new.jpg", mimeType: "image/jpeg"))
+        XCTAssertThrowsError(try Payload.update(draft))
+        draft.attachments[0].remoteURL = URL(string: "https://example.com/media/new.jpg")
+        XCTAssertEqual(try Payload.update(draft).object?["replace"]?.object?["photo"], .array([.string("https://example.com/media/new.jpg")]))
+    }
+
     func testRichHTMLStaysHTMLWhenEditing() throws {
         let source = JSONValue.object(["properties": .object(["content": .array([.object(["html": .string("<blockquote>Quote</blockquote>")])])])])
         let draft = try Draft(source: source, url: URL(string: "https://example.com/1")!)
