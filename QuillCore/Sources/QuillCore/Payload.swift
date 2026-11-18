@@ -84,10 +84,7 @@ public enum Payload {
         }
         let audio = d.attachments.filter(\.isAudio).compactMap { $0.remoteURL?.absoluteString }
         if !audio.isEmpty { p["audio"] = strings(audio) }
-        var photos: [JSONValue] = d.attachments.compactMap { attachment in
-            guard !attachment.isAudio, let url = attachment.remoteURL else { return nil }
-            return attachment.alt.isEmpty ? .string(url.absoluteString) : .object(["value": .string(url.absoluteString), "alt": .string(attachment.alt)])
-        }
+        var photos = d.photoProperty
         if let external = d.fields["photo-url"], !external.isEmpty { _ = try WebURL.parse(external); photos.append(.string(external)) }
         if !photos.isEmpty && d.kind != .article { p["photo"] = .array(photos) }
         return nested(d.kind == .review ? "h-review" : (d.kind == .event ? "h-event" : "h-entry"), p)
@@ -117,12 +114,16 @@ public enum Payload {
         guard let url = d.editURL else { throw QuillError("No post URL to update.") }
         guard d.kind.isEditable else { throw QuillError("This post type does not support updating.") }
         if let key = d.kind.targetProperty { _ = try WebURL.parse(d.target); _ = key }
+        if d.attachments.contains(where: { !$0.isAudio && $0.remoteURL == nil }) {
+            throw QuillError("Your site has no media endpoint, so photos can’t be added to a post that’s already published.")
+        }
         let original = d.original ?? [:]
         var replace: [String: JSONValue] = [:], removed: [String] = []
         for (key, value) in d.editableValues.sorted(by: { $0.key < $1.key }) where value != (original[key] ?? "") {
             let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
             if trimmed.isEmpty { if !(original[key] ?? "").isEmpty { removed.append(key) }; continue }
             switch key {
+            case "photo": replace[key] = .array(d.photoProperty)
             case "category":
                 replace[key] = strings(value.split(separator: ",").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty })
             case "content":

@@ -184,6 +184,60 @@ final class QuillNativeUITests: XCTestCase {
         XCTAssertEqual(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Trying the new café")).count, 1)
     }
 
+    func testEditingAPostKeepsItsPhotoAndSavesAParagraphDescription() throws {
+        let app = launch()
+        search("heron", in: app)
+        // The fixture answers updates with another URL, so earlier runs leave rows it can't fetch.
+        let original = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "A heron on the river, ")).matching(NSPredicate(format: "NOT label CONTAINS %@", "dawn")).firstMatch
+        XCTAssertTrue(original.waitForExistence(timeout: 15), "Is scripts/fixture_server.py running?")
+        original.tap()
+        let photo = app.buttons["photo.1"]
+        XCTAssertTrue(photo.waitForExistence(timeout: 10), "The published photo should stay in the composer")
+        XCTAssertTrue(photo.label.contains("A heron on the river"), photo.label)
+        XCTAssertTrue(app.buttons["Photo Library"].exists, "A published note can take more photos")
+        photo.tap()
+        let text = app.textViews["description.text"].waitForExistence(timeout: 3) ? app.textViews["description.text"] : app.textFields["description.text"]
+        XCTAssertTrue(text.waitForExistence(timeout: 5))
+        let stamp = Int(Date().timeIntervalSince1970)
+        text.typeText(", standing still.\nShot at dawn \(stamp).")
+        app.buttons["description.save"].tap()
+        XCTAssertTrue(photo.waitForExistence(timeout: 5))
+        app.buttons["publish"].tap()
+        // The composer closes once the server accepts the update.
+        let closed = expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: app.buttons["publish"])
+        wait(for: [closed], timeout: 60)
+        let log = try String(contentsOfFile: "/private/tmp/quill-fixture-requests.jsonl", encoding: .utf8)
+        let request = try XCTUnwrap(log.split(separator: "\n").last { $0.contains("dawn \(stamp)") }, "Is scripts/fixture_server.py running?")
+        XCTAssertTrue(request.contains(#"\"replace\":{\"photo\":[{"#), String(request))
+        XCTAssertTrue(request.contains("A heron on the river, standing still.\\\\nShot at dawn"), String(request))
+    }
+
+    func testPhotosAddedWhileEditingCanBeDraggedIntoPlace() throws {
+        let app = launch()
+        search("heron", in: app)
+        let original = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "A heron on the river, ")).matching(NSPredicate(format: "NOT label CONTAINS %@", "dawn")).firstMatch
+        XCTAssertTrue(original.waitForExistence(timeout: 15), "Is scripts/fixture_server.py running?")
+        original.tap()
+        XCTAssertTrue(app.buttons["photo.1"].waitForExistence(timeout: 10))
+        app.buttons["Photo Library"].tap()
+        // The system picker lists the simulator's sample photos.
+        let sample = app.images.matching(identifier: "PXGGridLayout-Info").firstMatch
+        XCTAssertTrue(sample.waitForExistence(timeout: 10))
+        sample.tap()
+        app.buttons["Done"].tap()
+        let second = app.buttons["photo.2"]
+        XCTAssertTrue(second.waitForExistence(timeout: 10))
+        XCTAssertFalse(second.label.contains("heron"), second.label)
+        second.press(forDuration: 0.8, thenDragTo: app.buttons["photo.1"])
+        let moved = expectation(for: NSPredicate(format: "label CONTAINS %@", "heron"), evaluatedWith: app.buttons["photo.2"])
+        wait(for: [moved], timeout: 5)
+        XCTAssertFalse(app.buttons["photo.1"].label.contains("heron"), app.buttons["photo.1"].label)
+        // Removing the added photo puts the post back as fetched, so closing leaves no draft.
+        app.buttons["Remove Photo 1"].tap()
+        XCTAssertFalse(app.buttons["photo.2"].waitForExistence(timeout: 2))
+        app.buttons["close"].firstMatch.tap()
+    }
+
     func testHiddenPostTypesLeaveTheListAndMenu() {
         let app = launch()
         setting("Like", in: app, postType: true, on: false)
