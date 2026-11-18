@@ -1,0 +1,529 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Micropub clients compared</title>
+<meta name="description" content="How Quill compares with other Micropub clients for iOS, Android, the web and the browser, with each app's current status and sources.">
+<link rel="icon" href="../assets/favicon.png" type="image/png">
+<link rel="apple-touch-icon" href="../assets/apple-touch-icon.png">
+<meta name="theme-color" content="#fbf8f4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#141016" media="(prefers-color-scheme: dark)">
+<link rel="stylesheet" href="../assets/site.css">
+<style>
+  .checked { font-size: 14px; color: var(--ink-3); margin-top: 18px; }
+  .legend { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px; font-size: 14px; color: var(--ink-2); margin: 28px 0 12px; padding: 0; list-style: none; }
+  .legend li { display: flex; align-items: center; gap: 6px; }
+  .table-scroll { overflow-x: auto; margin: 0 -24px; padding: 0 24px 8px; -webkit-overflow-scrolling: touch; }
+  @media (max-width: 600px) { .table-scroll { margin: 0 -16px; padding: 0 16px 8px; } }
+  table.compare { border-collapse: separate; border-spacing: 0; min-width: 900px; width: 100%; font-size: 14px; line-height: 1.3; background: var(--card); border: 1px solid var(--line); border-radius: 18px; overflow: hidden; }
+  .compare th, .compare td { padding: 10px 6px; border-bottom: 1px solid var(--line); }
+  .compare thead th { font-size: 11.5px; font-weight: 600; color: var(--ink-2); background: var(--bg-2); vertical-align: bottom; text-align: center; }
+  .compare thead .grp { font-size: 11.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); padding-bottom: 2px; border-bottom: 0; }
+  .compare thead .app-col { text-align: left; padding-left: 16px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); vertical-align: bottom; }
+  .compare thead .plat svg { width: 22px; height: 22px; display: block; margin: 0 auto 4px; color: var(--plum); }
+  .compare .fh { display: inline-block; max-width: 6.5em; }
+  .compare .first-f { border-left: 1px solid var(--line); }
+  .compare tbody tr:last-child > * { border-bottom: 0; }
+  .compare tbody th { text-align: left; font-weight: 600; white-space: nowrap; padding-left: 16px; padding-right: 12px; position: sticky; left: 0; background: var(--card); z-index: 1; }
+  .compare tbody th .status { margin-left: 6px; vertical-align: 1px; }
+  .compare td.c { position: relative; text-align: center; vertical-align: middle; width: 58px; }
+  .compare tr.ours > * { background: var(--plum-soft); }
+  .ck { width: 19px; height: 19px; display: inline-block; vertical-align: middle; }
+  .ck rect { fill: var(--plum); }
+  .ck path { stroke: var(--card); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+  .ck.part rect { fill: none; stroke: var(--plum); stroke-width: 1.6; }
+  .ck.part path { stroke: var(--plum); }
+  .compare tr.ours .ck path { stroke: var(--plum-soft); }
+  .compare tr.ours .ck.part path { stroke: var(--plum); }
+  .status { display: inline-block; font-size: 10.5px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+  .status.live { background: var(--plum-soft); color: var(--plum-ink); }
+  .status.new { background: var(--peach-soft); color: #8a5a3a; }
+  .status.gone { background: var(--bg-2); color: var(--ink-3); }
+  @media (prefers-color-scheme: dark) { .status.new { color: var(--peach); } }
+  .compare tr.ours .status.live { background: var(--card); }
+
+  .clients { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; margin-top: 28px; }
+  .client { background: var(--card); border: 1px solid var(--line); border-radius: 20px; padding: 22px; display: flex; flex-direction: column; gap: 8px; }
+  .client header { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  .client h3 { font-family: var(--sans); font-size: 18px; letter-spacing: 0; }
+  .client h3 a { color: var(--ink); text-decoration: none; }
+  .client h3 a:hover { text-decoration: underline; }
+  .client .meta { font-size: 13px; color: var(--ink-3); margin: 0; }
+  .client p { margin: 0; color: var(--ink-2); font-size: 15px; line-height: 1.5; }
+  .client .src { font-size: 13px; margin-top: auto; padding-top: 6px; }
+  .client .src a { margin-right: 12px; }
+  .group-title { font-size: 28px; margin-top: 56px; }
+
+  .diff { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 16px; margin-top: 28px; }
+  .diff .tile h3 { margin-top: 2px; }
+</style>
+</head>
+<body>
+<header class="nav" id="nav">
+  <div class="wrap">
+    <a class="brand" href="../"><img src="../assets/icon-256.png" alt="">Quill</a>
+    <ul>
+      <li class="optional"><a href="../#features">Features</a></li>
+      <li><a href="../indieweb/">IndieWeb</a></li>
+      <li><a href="./" aria-current="page">Compare</a></li>
+      <li><a href="https://github.com/caseyg/quill-native">GitHub</a></li>
+    </ul>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="doc-hero">
+    <p class="eyebrow">Micropub clients</p>
+    <h1 style="font-size:clamp(40px,6vw,68px)">Quill and the other apps.</h1>
+    <p class="lede">Any app that speaks <a href="https://micropub.spec.indieweb.org/">Micropub</a> can post to your site, so you’re never locked in to one. Here’s how Quill compares with the other clients for iPhone, Android, the web and the browser, and which of them are still around.</p>
+    <p class="checked">Checked on 18 November 2026 against the <a href="https://getindiekit.com/clients">Indiekit client list</a>, the <a href="https://indieweb.org/Micropub/Clients">IndieWeb wiki’s list of clients</a> and each app’s own pages. Spotted a mistake? <a href="https://github.com/caseyg/quill-native/issues">Open an issue</a>.</p>
+  </div>
+
+  <section class="doc-section" id="table">
+    <p class="eyebrow">At a glance</p>
+    <h2>Feature by feature</h2>
+    <p>The apps that are maintained, or were until recently, and that write general posts, plus Indiekit’s built-in editor. A blank means the app doesn’t offer it, or its documentation doesn’t say so. It isn’t proof the feature is missing. The details are in the cards further down.</p>
+    <ul class="legend">
+      <li><span class="status live">Active</span> available now</li>
+      <li><span class="status new">New</span> released or rebuilt in 2026</li>
+      <li><span class="status gone">Gone</span> removed from stores or archived</li>
+      <li><svg class="ck" viewBox="0 0 20 20" aria-hidden="true"><rect x="1" y="1" width="18" height="18" rx="5"/><path d="m5.5 10.2 3 3 6-6.4" fill="none"/></svg> yes</li>
+      <li><svg class="ck part" viewBox="0 0 20 20" aria-hidden="true"><rect x="1" y="1" width="18" height="18" rx="5"/><path d="M6 10h8" fill="none"/></svg> partly</li>
+    </ul>
+    <div class="table-scroll" tabindex="0" role="region" aria-label="Comparison table, scrolls sideways">
+    <table class="compare">
+      <thead>
+        <tr>
+          <th scope="col" rowspan="2" class="app-col">App</th>
+          <th scope="colgroup" colspan="5" class="grp">Platforms</th>
+          <th scope="colgroup" colspan="9" class="grp">Features</th>
+        </tr>
+        <tr>
+          <th scope="col" class="plat" title="iPhone and iPad"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="2.5" width="10" height="19" rx="2.5"/><path d="M11 18.5h2"/></svg><span>iOS</span></th>
+          <th scope="col" class="plat" title="Mac"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5" width="16" height="10.5" rx="1.5"/><path d="M2 19h20"/></svg><span>Mac</span></th>
+          <th scope="col" class="plat" title="Android"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 11a6 6 0 0 1 12 0v1H6z"/><path d="M6 14h12v4.5a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 6 18.5z"/><path d="m8 5.5-1.5-2M16 5.5l1.5-2"/><circle cx="9.5" cy="9" r=".6" fill="currentColor"/><circle cx="14.5" cy="9" r=".6" fill="currentColor"/></svg><span>Android</span></th>
+          <th scope="col" class="plat" title="Web"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.7 3.8 5.7 3.8 9s-1.3 6.3-3.8 9c-2.5-2.7-3.8-5.7-3.8-9S9.5 5.7 12 3Z"/></svg><span>Web</span></th>
+          <th scope="col" class="plat" title="Browser extension"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4.5a2 2 0 1 1 4 0V6h4a1 1 0 0 1 1 1v4h-1.5a2 2 0 1 0 0 4H18v4a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-4h1.5a2 2 0 1 0 0-4H5V7a1 1 0 0 1 1-1h3z"/></svg><span>Extension</span></th>
+          <th scope="col" class="first-f"><span class="fh">Markdown</span></th>
+          <th scope="col"><span class="fh">Photo alt text</span></th>
+          <th scope="col"><span class="fh">Edit posts</span></th>
+          <th scope="col"><span class="fh">Drafts</span></th>
+          <th scope="col"><span class="fh">Syndication</span></th>
+          <th scope="col"><span class="fh">Text per network</span></th>
+          <th scope="col"><span class="fh">Threads</span></th>
+          <th scope="col"><span class="fh">Share sheet</span></th>
+          <th scope="col"><span class="fh">Voice notes</span></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="ours">
+          <th scope="row">Quill for iOS <span class="status live">Active</span></th>
+          <td class="c"><svg class="ck" viewBox="0 0 20 20" aria-hidden="true"><rect x="1" y="1" width="18" height="18" rx="5"/><path d="m5.5 10.2 3 3 6-6.4" fill="none"/></svg><span class="sr-only">iPhone and iPad</span></td>
+          <td class="c"></td>
+          <td class="c"></td>
+          <td class="c"></td>
+          <td class="c"></td>
+          <td class="c first-f"><svg class="ck" viewBox="0 0 20 20" aria-hidden="true"><rect x="1" y="1" width="18" height="18" rx="5"/><path d="m5.5 10.2 3 3 6-6.4" fill="none"/></svg><span class="sr-only">Yes</span></td>
+          <td class="c"><svg class="ck" viewBox="0 0 20 20" aria-hidden="true"><rect x="1" y="1" width="18" height="18" rx="5"/><path d="m5.5 10.2 3 3 6-6.4" fill="none"/></svg><span class="sr-only">Yes</span></td>
+          <td class="c"><svg class="ck" viewBox="0 0 20 20" aria-hidden="true"><rect x="1" y="1" width="18" height="18" rx="5"/><path d="m5.5 10.2 3 3 6-6.4" fill="none"/></svg><span class="sr-only">Yes</span></td>
+          <td class="c"><svg class="ck" viewBox="0 0 20 20" aria-hidden="true"><rect x="1" y="1" width="18" height="18" rx="5"/><path d="m5.5 10.2 3 3 6-6.4" fill="none"/></svg><span class="sr-only">Yes</span></td>
+          <td class="c"><svg class="ck" viewBox="0 0 20 20" aria-hidden="true"><rect x="1" y="1" width="18" height="18" rx="5"/><path d="m5.5 10.2 3 3 6-6.4" fill="none"/></svg><span class="sr-only">Yes</span></td>
+          <td class="c"><svg class="ck" viewBox="0 0 20 20" aria-hidden="true"><rect x="1" y="1" width="18" height="18" rx="5"/><path d="m5.5 10.2 3 3 6-6.4" fill="none"/></svg><span class="sr-only">Yes</span></td>
+          <td class="c"><svg class="ck" viewBox="0 0 20 20" aria-hidden="true"><rect x="1" y="1" width="18" height="18" rx="5"/><path d="m5.5 10.2 3 3 6-6.4" fill="none"/></svg><span class="sr-only">Yes</span></td>
+          <td class="c"><svg class="ck" viewBox="0 0 20 20" aria-hidden="true"><rect x="1" y="1" width="18" height="18" rx="5"/><path d="m5.5 10.2 3 3 6-6.4" fill="none"/></svg><span class="sr-only">Yes</span></td>
+          <td class="c"><svg class="ck" viewBox="0 0 20 20" aria-hidden="true"><rect x="1" y="1" width="18" height="18" rx="5"/><path d="m5.5 10.2 3 3 6-6.4" fill="none"/></svg><span class="sr-only">Yes</span></td>
+        </tr>
+        <tr class="ours">
+          <th scope="row">Quill for Android <span class="status new">New</span></th>
+          <td class="c"></td>
+          <td class="c"></td>
+          <td class="c"><svg class="ck" viewBox="0 0 20 20" aria-hidden="true"><rect x="1" y="1" width="18" height="18" rx="5"/><path d="m5.5 10.2 3 3 6-6.4" fill="none"/></svg><span class="sr-only">Android</span></td>
+          <td class="c"></td>
+          <td class="c"></td>
+          <td class="c first-f"><svg class="ck" viewBox="0 0 20 20" aria-hidden="true"><rect x="1" y="1" width="18" height="18" rx="5"/><path d="m5.5 10.2 3 3 6-6.4" fill="none"/></svg><span class="sr-only">Yes</span></td>
+          <td class="c"><svg class="ck" viewBox="0 0 20 20" aria-hidden="true"><rect x="1" y="1" width="18" height="18" rx="5"/><path d="m5.5 10.2 3 3 6-6.4" fill="none"/></svg><span class="sr-only">Yes</span></td>
+          <td class="c"><svg class="ck" viewBox="0 0 20 20" aria-hidden="true"><rect x="1" y="1" width="18" height="18" rx="5"/><path d="m5.5 10.2 3 3 6-6.4" fill="none"/></svg><span class="sr-only">Yes</span></td>
+          <td class="c"><svg class="ck" viewBox="0 0 20 20" aria-hidden="true"><rect x="1" y="1" width="18" height="18" rx="5"/><path d="m5.5 10.2 3 3 6-6.4" fill="none"/></svg><span class="sr-only">Yes</span></td>
+          <td class="c"><svg class="ck" viewBox="0 0 20 20" aria-hidden="true"><rect x="1" y="1" width="18" height="18" rx="5"/><path d="m5.5 10.2 3 3 6-6.4" fill="none"/></svg><span class="sr-only">Yes</span></td>
+          <td class="c"><span class="sr-only">No</span></td>
+          <td class="c"><span class="sr-only">No</span></td>
+          <td class="c"><svg class="ck" viewBox="0 0 20 20" aria-hidden="true"><rect x="1" y="1" width="18" height="18" rx="5"/><path d="m5.5 10.2 3 3 6-6.4" fill="none"/></svg><span class="sr-only">Yes</span></td>
+          <td class="c"><svg class="ck" viewBox="0 0 20 20" aria-hidden="true"><rect x="1" y="1" width="18" height="18" rx="5"/><path d="m5.5 10.2 3 3 6-6.4" fill="none"/></svg><span class="sr-only">Yes</span></td>
+        </tr>
+        <tr>
+          <th scope="row">OutPost <span class="status new">New</span></th>
+          <td class="c"><svg class="ck" viewBox="0 0 20 20" aria-hidden="true"><rect x="1" y="1" width="18" height="18" rx="5"/><path d="m5.5 10.2 3 3 6-6.4" fill="none"/></svg><span class="sr-only">iPhone and iPad</span></td>
+          <td class="c"><svg class="ck" viewBox="0 0 20 20" aria-hidden="true"><rect x="1" y="1" width="18" height="18" rx="5"/><path d="m5.5 10.2 3 3 6-6.4" fill="none"/></svg><span class="sr-only">Mac</span></td>
+          <td class="c"></td>
+          <td class="c"></td>
+          <td class="c"></td>
+          <td class="c first-f"><svg class="ck" viewBox="0 0 20 20" aria-hidden="true"><rect x="1" y="1" width="18" height="18" rx="5"/><path d="m5.5 10.2 3 3 6-6.4" fill="none"/></svg><span class="sr-only">Yes</span></td>
+          <td class="c"><svg class="ck" viewBox="0 0 20 20" aria-hidden="true"><rect x="1" y="1" width="18" height="18" rx="5"/><path d="m5.5 10.2 3 3 6-6.4" fill="none"/></svg><span class="sr-only">Yes</span></td>
+          <td class="c"><svg class="ck" viewBox="0 0 20 20" aria-hidden="true"><rect x="1" y="1" width="18" height="18" rx="5"/><path d="m5.5 10.2 3 3 6-6.4" fill="none"/></svg><span class="sr-only">Yes</span></td>
+          <td class="c"><svg class="ck" viewBox="0 0 20 20" aria-hidden="true"><rect x="1" y="1" width="18" height="18" rx="5"/><path d="m5.5 10.2 3 3 6-6.4" fill="none"/></svg><span class="sr-only">Yes</span></td>
+          <td class="c"><svg class="ck" viewBox="0 0 20 20" aria-hidden="true"><rect x="1" y="1" width="18" height="18" rx="5"/><path d="m5.5 10.2 3 3 6-6.4" fill="none"/></svg><span class="sr-only">Yes</span></td>
+          <td class="c"><span class="sr-only">No</span></td>
+          <td class="c"><span class="sr-only">No</span></td>
+          <td class="c"><span class="sr-only">No</span></td>
+          <td class="c"><span class="sr-only">No</span></td>
+        </tr>
+        <tr>
+          <th scope="row">Micro.blog <span class="status live">Active</span></th>
+          <td class="c"><svg class="ck" viewBox="0 0 20 20" aria-hidden="true"><rect x="1" y="1" width="18" height="18" rx="5"/><path d="m5.5 10.2 3 3 6-6.4" fill="none"/></svg><span class="sr-only">iPhone and iPad</span></td>
+          <td class="c"><svg class="ck" viewBox="0 0 20 20" aria-hidden="true"><rect x="1" y="1" width="18" height="18" rx="5"/><path d="m5.5 10.2 3 3 6-6.4" fill="none"/></svg><span class="sr-only">Mac</span></td>
+          <td class="c"><svg class="ck" viewBox="0 0 20 20" aria-hidden="true"><rect x="1" y="1" width="18" height="18" rx="5"/><path d="m5.5 10.2 3 3 6-6.4" fill="none"/></svg><span class="sr-only">Android</span></td>
+          <td class="c"></td>
+          <td class="c"></td>
+          <td class="c first-f"><svg class="ck" viewBox="0 0 20 20" aria-hidden="true"><rect x="1" y="1" width="18" height="18" rx="5"/><path d="m5.5 10.2 3 3 6-6.4" fill="none"/></svg><span class="sr-only">Yes</span></td>
+          <td class="c"><span class="sr-only">No</span></td>
+          <td class="c"><span class="sr-only">No</span></td>
+          <td class="c"><span class="sr-only">No</span></td>
+          <td class="c"><span class="sr-only">No</span></td>
+          <td class="c"><span class="sr-only">No</span></td>
+          <td class="c"><span class="sr-only">No</span></td>
+          <td class="c"><span class="sr-only">No</span></td>
+          <td class="c"><span class="sr-only">No</span></td>
+        </tr>
+        <tr>
+          <th scope="row">iA Writer <span class="status live">Active</span></th>
+          <td class="c"><svg class="ck" viewBox="0 0 20 20" aria-hidden="true"><rect x="1" y="1" width="18" height="18" rx="5"/><path d="m5.5 10.2 3 3 6-6.4" fill="none"/></svg><span class="sr-only">iPhone and iPad</span></td>
+          <td class="c"><svg class="ck" viewBox="0 0 20 20" aria-hidden="true"><rect x="1" y="1" width="18" height="18" rx="5"/><path d="m5.5 10.2 3 3 6-6.4" fill="none"/></svg><span class="sr-only">Mac</span></td>
+          <td class="c"></td>
+          <td class="c"></td>
+          <td class="c"></td>
+          <td class="c first-f"><svg class="ck" viewBox="0 0 20 20" aria-hidden="true"><rect x="1" y="1" width="18" height="18" rx="5"/><path d="m5.5 10.2 3 3 6-6.4" fill="none"/></svg><span class="sr-only">Yes</span></td>
+          <td class="c"><span class="sr-only">No</span></td>
+          <td class="c"><span class="sr-only">No</span></td>
+          <td class="c"><svg class="ck" viewBox="0 0 20 20" aria-hidden="true"><rect x="1" y="1" width="18" height="18" rx="5"/><path d="m5.5 10.2 3 3 6-6.4" fill="none"/></svg><span class="sr-only">Yes</span></td>
+          <td class="c"><span class="sr-only">No</span></td>
+          <td class="c"><span class="sr-only">No</span></td>
+          <td class="c"><span class="sr-only">No</span></td>
+          <td class="c"><span class="sr-only">No</span></td>
+          <td class="c"><span class="sr-only">No</span></td>
+        </tr>
+        <tr>
+          <th scope="row">Quill on the web <span class="status new">New</span></th>
+          <td class="c"></td>
+          <td class="c"></td>
+          <td class="c"></td>
+          <td class="c"><svg class="ck" viewBox="0 0 20 20" aria-hidden="true"><rect x="1" y="1" width="18" height="18" rx="5"/><path d="m5.5 10.2 3 3 6-6.4" fill="none"/></svg><span class="sr-only">Web</span></td>
+          <td class="c"></td>
+          <td class="c first-f"><svg class="ck" viewBox="0 0 20 20" aria-hidden="true"><rect x="1" y="1" width="18" height="18" rx="5"/><path d="m5.5 10.2 3 3 6-6.4" fill="none"/></svg><span class="sr-only">Yes</span></td>
+          <td class="c"><svg class="ck" viewBox="0 0 20 20" aria-hidden="true"><rect x="1" y="1" width="18" height="18" rx="5"/><path d="m5.5 10.2 3 3 6-6.4" fill="none"/></svg><span class="sr-only">Yes</span></td>
+          <td class="c" title="Likes and reposts only"><svg class="ck part" viewBox="0 0 20 20" aria-hidden="true"><rect x="1" y="1" width="18" height="18" rx="5"/><path d="M6 10h8" fill="none"/></svg><span class="sr-only">Partly: Likes and reposts only</span></td>
+          <td class="c"><svg class="ck" viewBox="0 0 20 20" aria-hidden="true"><rect x="1" y="1" width="18" height="18" rx="5"/><path d="m5.5 10.2 3 3 6-6.4" fill="none"/></svg><span class="sr-only">Yes</span></td>
+          <td class="c"><svg class="ck" viewBox="0 0 20 20" aria-hidden="true"><rect x="1" y="1" width="18" height="18" rx="5"/><path d="m5.5 10.2 3 3 6-6.4" fill="none"/></svg><span class="sr-only">Yes</span></td>
+          <td class="c"><span class="sr-only">No</span></td>
+          <td class="c"><span class="sr-only">No</span></td>
+          <td class="c" title="Bookmarklets"><svg class="ck part" viewBox="0 0 20 20" aria-hidden="true"><rect x="1" y="1" width="18" height="18" rx="5"/><path d="M6 10h8" fill="none"/></svg><span class="sr-only">Partly: Bookmarklets</span></td>
+          <td class="c"><span class="sr-only">No</span></td>
+        </tr>
+        <tr>
+          <th scope="row">Micropublish <span class="status live">Active</span></th>
+          <td class="c"></td>
+          <td class="c"></td>
+          <td class="c"></td>
+          <td class="c"><svg class="ck" viewBox="0 0 20 20" aria-hidden="true"><rect x="1" y="1" width="18" height="18" rx="5"/><path d="m5.5 10.2 3 3 6-6.4" fill="none"/></svg><span class="sr-only">Web</span></td>
+          <td class="c"></td>
+          <td class="c first-f"><span class="sr-only">No</span></td>
+          <td class="c"><span class="sr-only">No</span></td>
+          <td class="c"><svg class="ck" viewBox="0 0 20 20" aria-hidden="true"><rect x="1" y="1" width="18" height="18" rx="5"/><path d="m5.5 10.2 3 3 6-6.4" fill="none"/></svg><span class="sr-only">Yes</span></td>
+          <td class="c"><svg class="ck" viewBox="0 0 20 20" aria-hidden="true"><rect x="1" y="1" width="18" height="18" rx="5"/><path d="m5.5 10.2 3 3 6-6.4" fill="none"/></svg><span class="sr-only">Yes</span></td>
+          <td class="c"><svg class="ck" viewBox="0 0 20 20" aria-hidden="true"><rect x="1" y="1" width="18" height="18" rx="5"/><path d="m5.5 10.2 3 3 6-6.4" fill="none"/></svg><span class="sr-only">Yes</span></td>
+          <td class="c"><span class="sr-only">No</span></td>
+          <td class="c"><span class="sr-only">No</span></td>
+          <td class="c"><span class="sr-only">No</span></td>
+          <td class="c"><span class="sr-only">No</span></td>
+        </tr>
+        <tr>
+          <th scope="row">Indiekit <span class="status live">Active</span></th>
+          <td class="c"></td>
+          <td class="c"></td>
+          <td class="c"></td>
+          <td class="c"><svg class="ck" viewBox="0 0 20 20" aria-hidden="true"><rect x="1" y="1" width="18" height="18" rx="5"/><path d="m5.5 10.2 3 3 6-6.4" fill="none"/></svg><span class="sr-only">Web</span></td>
+          <td class="c"></td>
+          <td class="c first-f"><svg class="ck" viewBox="0 0 20 20" aria-hidden="true"><rect x="1" y="1" width="18" height="18" rx="5"/><path d="m5.5 10.2 3 3 6-6.4" fill="none"/></svg><span class="sr-only">Yes</span></td>
+          <td class="c"><svg class="ck" viewBox="0 0 20 20" aria-hidden="true"><rect x="1" y="1" width="18" height="18" rx="5"/><path d="m5.5 10.2 3 3 6-6.4" fill="none"/></svg><span class="sr-only">Yes</span></td>
+          <td class="c"><svg class="ck" viewBox="0 0 20 20" aria-hidden="true"><rect x="1" y="1" width="18" height="18" rx="5"/><path d="m5.5 10.2 3 3 6-6.4" fill="none"/></svg><span class="sr-only">Yes</span></td>
+          <td class="c"><svg class="ck" viewBox="0 0 20 20" aria-hidden="true"><rect x="1" y="1" width="18" height="18" rx="5"/><path d="m5.5 10.2 3 3 6-6.4" fill="none"/></svg><span class="sr-only">Yes</span></td>
+          <td class="c"><svg class="ck" viewBox="0 0 20 20" aria-hidden="true"><rect x="1" y="1" width="18" height="18" rx="5"/><path d="m5.5 10.2 3 3 6-6.4" fill="none"/></svg><span class="sr-only">Yes</span></td>
+          <td class="c"><span class="sr-only">No</span></td>
+          <td class="c"><span class="sr-only">No</span></td>
+          <td class="c"><span class="sr-only">No</span></td>
+          <td class="c"><span class="sr-only">No</span></td>
+        </tr>
+        <tr>
+          <th scope="row">Sparkles <span class="status live">Active</span></th>
+          <td class="c"></td>
+          <td class="c"></td>
+          <td class="c"></td>
+          <td class="c"><svg class="ck" viewBox="0 0 20 20" aria-hidden="true"><rect x="1" y="1" width="18" height="18" rx="5"/><path d="m5.5 10.2 3 3 6-6.4" fill="none"/></svg><span class="sr-only">Web</span></td>
+          <td class="c"></td>
+          <td class="c first-f"><span class="sr-only">No</span></td>
+          <td class="c"><span class="sr-only">No</span></td>
+          <td class="c"><span class="sr-only">No</span></td>
+          <td class="c"><svg class="ck" viewBox="0 0 20 20" aria-hidden="true"><rect x="1" y="1" width="18" height="18" rx="5"/><path d="m5.5 10.2 3 3 6-6.4" fill="none"/></svg><span class="sr-only">Yes</span></td>
+          <td class="c"><svg class="ck" viewBox="0 0 20 20" aria-hidden="true"><rect x="1" y="1" width="18" height="18" rx="5"/><path d="m5.5 10.2 3 3 6-6.4" fill="none"/></svg><span class="sr-only">Yes</span></td>
+          <td class="c"><span class="sr-only">No</span></td>
+          <td class="c"><span class="sr-only">No</span></td>
+          <td class="c"><svg class="ck" viewBox="0 0 20 20" aria-hidden="true"><rect x="1" y="1" width="18" height="18" rx="5"/><path d="m5.5 10.2 3 3 6-6.4" fill="none"/></svg><span class="sr-only">Yes</span></td>
+          <td class="c"><span class="sr-only">No</span></td>
+        </tr>
+        <tr>
+          <th scope="row">Plume <span class="status new">New</span></th>
+          <td class="c"></td>
+          <td class="c"></td>
+          <td class="c"></td>
+          <td class="c"></td>
+          <td class="c"><svg class="ck" viewBox="0 0 20 20" aria-hidden="true"><rect x="1" y="1" width="18" height="18" rx="5"/><path d="m5.5 10.2 3 3 6-6.4" fill="none"/></svg><span class="sr-only">Browser extension</span></td>
+          <td class="c first-f"><span class="sr-only">No</span></td>
+          <td class="c"><span class="sr-only">No</span></td>
+          <td class="c"><span class="sr-only">No</span></td>
+          <td class="c"><svg class="ck" viewBox="0 0 20 20" aria-hidden="true"><rect x="1" y="1" width="18" height="18" rx="5"/><path d="m5.5 10.2 3 3 6-6.4" fill="none"/></svg><span class="sr-only">Yes</span></td>
+          <td class="c"><svg class="ck" viewBox="0 0 20 20" aria-hidden="true"><rect x="1" y="1" width="18" height="18" rx="5"/><path d="m5.5 10.2 3 3 6-6.4" fill="none"/></svg><span class="sr-only">Yes</span></td>
+          <td class="c"><span class="sr-only">No</span></td>
+          <td class="c"><span class="sr-only">No</span></td>
+          <td class="c" title="Right-click on any page"><svg class="ck part" viewBox="0 0 20 20" aria-hidden="true"><rect x="1" y="1" width="18" height="18" rx="5"/><path d="M6 10h8" fill="none"/></svg><span class="sr-only">Partly: Right-click on any page</span></td>
+          <td class="c"><span class="sr-only">No</span></td>
+        </tr>
+        <tr>
+          <th scope="row">Omnibear <span class="status live">Active</span></th>
+          <td class="c"></td>
+          <td class="c"></td>
+          <td class="c"></td>
+          <td class="c"></td>
+          <td class="c"><svg class="ck" viewBox="0 0 20 20" aria-hidden="true"><rect x="1" y="1" width="18" height="18" rx="5"/><path d="m5.5 10.2 3 3 6-6.4" fill="none"/></svg><span class="sr-only">Browser extension</span></td>
+          <td class="c first-f"><span class="sr-only">No</span></td>
+          <td class="c"><span class="sr-only">No</span></td>
+          <td class="c"><span class="sr-only">No</span></td>
+          <td class="c"><span class="sr-only">No</span></td>
+          <td class="c"><span class="sr-only">No</span></td>
+          <td class="c"><span class="sr-only">No</span></td>
+          <td class="c"><span class="sr-only">No</span></td>
+          <td class="c" title="Right-click to reply, like or repost"><svg class="ck part" viewBox="0 0 20 20" aria-hidden="true"><rect x="1" y="1" width="18" height="18" rx="5"/><path d="M6 10h8" fill="none"/></svg><span class="sr-only">Partly: Right-click to reply, like or repost</span></td>
+          <td class="c"><span class="sr-only">No</span></td>
+        </tr>
+        <tr>
+          <th scope="row">IndiePass <span class="status gone">Gone</span></th>
+          <td class="c"></td>
+          <td class="c"></td>
+          <td class="c"><svg class="ck" viewBox="0 0 20 20" aria-hidden="true"><rect x="1" y="1" width="18" height="18" rx="5"/><path d="m5.5 10.2 3 3 6-6.4" fill="none"/></svg><span class="sr-only">Android</span></td>
+          <td class="c"></td>
+          <td class="c"></td>
+          <td class="c first-f"><span class="sr-only">No</span></td>
+          <td class="c"><span class="sr-only">No</span></td>
+          <td class="c"><span class="sr-only">No</span></td>
+          <td class="c"><svg class="ck" viewBox="0 0 20 20" aria-hidden="true"><rect x="1" y="1" width="18" height="18" rx="5"/><path d="m5.5 10.2 3 3 6-6.4" fill="none"/></svg><span class="sr-only">Yes</span></td>
+          <td class="c"><svg class="ck" viewBox="0 0 20 20" aria-hidden="true"><rect x="1" y="1" width="18" height="18" rx="5"/><path d="m5.5 10.2 3 3 6-6.4" fill="none"/></svg><span class="sr-only">Yes</span></td>
+          <td class="c"><span class="sr-only">No</span></td>
+          <td class="c"><span class="sr-only">No</span></td>
+          <td class="c"><svg class="ck" viewBox="0 0 20 20" aria-hidden="true"><rect x="1" y="1" width="18" height="18" rx="5"/><path d="m5.5 10.2 3 3 6-6.4" fill="none"/></svg><span class="sr-only">Yes</span></td>
+          <td class="c"><span class="sr-only">No</span></td>
+        </tr>
+      </tbody>
+    </table>
+    </div>
+  </section>
+
+  <section class="doc-section" id="different">
+    <p class="eyebrow">Where Quill differs</p>
+    <h2>What we couldn’t find anywhere else</h2>
+    <p>Some of these lean on small Micropub extensions. Servers that don’t know them ignore them, and the post goes through as usual.</p>
+    <div class="diff">
+      <div class="tile"><h3>Different text for each network</h3><p>Write one version for Bluesky and another for Mastodon, each counted the way that network counts, with @mentions of people you follow. Sent as <code>mp-syndicate-text</code>.</p></div>
+      <div class="tile"><h3>Threads</h3><p>Split a long post into a thread for networks that support it, when your server advertises <code>syndication-thread</code> in its config.</p></div>
+      <div class="tile"><h3>Drafts on GitHub</h3><p>Keep drafts as files in a GitHub repository you own, so they follow you between devices without a Quill server.</p></div>
+      <div class="tile"><h3>Voice notes</h3><p>Record a thought and watch it turn into text as you speak, then post the text, the recording, or both.</p></div>
+    </div>
+    <p style="margin-top:28px">And where others are ahead: OutPost, Micro.blog and iA Writer have Mac apps. Micro.blog and the late IndiePass include a reader for the people you follow. Quill on the web, Micropublish and Sparkles run in any browser with nothing to install. Indiekit comes with its own editor if it’s already your server. And Sparkles has watch, read, listen and play posts.</p>
+  </section>
+
+  <section class="doc-section" id="ios">
+    <p class="eyebrow">The details</p>
+    <h2>Every client we looked at</h2>
+    <p>Grouped by where they run, with links to the sources for each claim above.</p>
+
+    <h3 class="group-title">iPhone and iPad</h3>
+    <div class="clients">
+      <article class="client">
+        <header><h3><a href="https://jimmitchell.dev/outpost/">OutPost</a></h3><span class="status new">New</span></header>
+        <p class="meta">Jim Mitchell · iOS 18, macOS 15</p>
+        <p>The closest app to Quill. A Mac app launched in October 2026 and the iPhone and iPad app reached the App Store on 15 November 2026. Markdown with a preview, alt text prompts, editing any post on your site by URL, drafts, and syndication defaults per account.</p>
+        <p class="src"><a href="https://jimmitchell.dev/outpost/">Site</a><a href="https://indieweb.org/OutPost">Wiki</a></p>
+      </article>
+      <article class="client">
+        <header><h3><a href="https://help.micro.blog/t/signing-in-with-the-ios-app/33">Micro.blog</a></h3><span class="status live">Active</span></header>
+        <p class="meta">Manton Reece · iOS, Mac, Android</p>
+        <p>Built for Micro.blog first, but can sign in to your own Micropub or WordPress site and post there. WordPress custom post types aren’t supported. The old open-source iOS app was archived in 2023 when it was rewritten.</p>
+        <p class="src"><a href="https://getindiekit.com/clients">Indiekit</a><a href="https://help.micro.blog/t/connecting-to-wordpress-with-ios-app/2164">WordPress help</a><a href="https://github.com/microdotblog/microblog-ios">Old source</a></p>
+      </article>
+      <article class="client">
+        <header><h3><a href="https://indieweb.org/Sunlit">Sunlit</a> and <a href="https://epilogue.micro.blog">Epilogue</a></h3><span class="status live">Active</span></header>
+        <p class="meta">Micro.blog · iOS; Epilogue also on Android</p>
+        <p>Single-purpose apps from Micro.blog. Sunlit posts photo stories and Epilogue posts what you’re reading. Both can post to a Micropub site, with Micro.blog providing the timeline.</p>
+        <p class="src"><a href="https://indieweb.org/Sunlit">Wiki</a><a href="https://indieweb.org/Micropub/Clients">Client list</a></p>
+      </article>
+      <article class="client">
+        <header><h3><a href="https://ia.net/writer/support/preview/blog">iA Writer</a></h3><span class="status live">Active</span></header>
+        <p class="meta">iA · iOS, Mac</p>
+        <p>A Markdown writing app that added Micropub publishing in version 5.5 (May 2020), beside WordPress, Ghost and Medium. Good for long articles, not for likes, replies or check-ins.</p>
+        <p class="src"><a href="https://wptavern.com/ia-writer-adds-expanded-support-for-indieweb-tools-and-wordpress-publishing">WP Tavern</a><a href="https://george.mand.is/2023/05/publishing-to-11ty-with-ia-writer-and-micropub/">A setup guide</a></p>
+      </article>
+      <article class="client">
+        <header><h3>Drafts and Shortcuts</h3><span class="status live">Active</span></header>
+        <p class="meta">Community actions · iOS, Mac</p>
+        <p>A <a href="https://actions.getdrafts.com/a/1QC">Micropub action for Drafts</a> and <a href="https://cagrimmett.com/development/2023/02/12/ios-shortcut-actions-for-micropub-posting/">Shortcuts by Chuck Grimmett</a> post notes, likes, replies and bookmarks. Handy glue if you set up your own token.</p>
+        <p class="src"><a href="https://indieweb.org/Micropub/Clients">Client list</a></p>
+      </article>
+      <article class="client">
+        <header><h3><a href="https://indieweb.org/Indigenous">Indigenous for iOS</a></h3><span class="status gone">Gone</span></header>
+        <p class="meta">Eddie Hinkle · iOS</p>
+        <p>The first full native IndieWeb app for iPhone, with a Microsub reader and share sheet. Removed from the App Store in 2022, and the source is archived.</p>
+        <p class="src"><a href="https://indieweb.org/Indigenous">Wiki</a><a href="https://github.com/indiepass/indiepass-ios">Archived source</a></p>
+      </article>
+    </div>
+
+    <h3 class="group-title" id="android">Android</h3>
+    <div class="clients">
+      <article class="client">
+        <header><h3><a href="https://indieweb.org/IndiePass_for_Android">IndiePass</a></h3><span class="status gone">Gone</span></header>
+        <p class="meta">Kristof De Jaeger, then Mark Sutherland · Android</p>
+        <p>Formerly Indigenous for Android, and the most complete Android client: a dozen post types, drafts, share target, a reader, and Mastodon and Pixelfed accounts. Removed from the app stores and archived on 21 January 2026.</p>
+        <p class="src"><a href="https://indiepass.app">Announcement</a><a href="https://f-droid.org/en/packages/com.indieweb.indigenous/">F-Droid</a></p>
+      </article>
+      <article class="client">
+        <header><h3><a href="https://getindiekit.com/clients">Micro.blog for Android</a></h3><span class="status live">Active</span></header>
+        <p class="meta">Micro.blog · Android</p>
+        <p>The official app, listed by Indiekit as able to post to any Micropub site. Since IndiePass left, it’s one of very few options on Android, which <a href="https://rmendes.net/digest/2026/W33/">others have noticed too</a>.</p>
+        <p class="src"><a href="https://play.google.com/store/apps/details?id=blog.micro.android">Play Store</a></p>
+      </article>
+      <article class="client">
+        <header><h3>Kittybox Companion and Wrimini</h3><span class="status gone">Early</span></header>
+        <p class="meta">Vika; Peter Stuifzand · Android</p>
+        <p>Kittybox Companion is in development and works best with the Kittybox server. Wrimini is a small Android client with few details published.</p>
+        <p class="src"><a href="https://indieweb.org/Micropub/Clients">Client list</a><a href="https://indieweb.org/Wrimini">Wrimini</a></p>
+      </article>
+    </div>
+
+    <h3 class="group-title" id="web">On the web</h3>
+    <div class="clients">
+      <article class="client">
+        <header><h3><a href="https://quill.p3k.app/">Quill</a></h3><span class="status new">New</span></header>
+        <p class="meta">Aaron Parecki · any browser</p>
+        <p>The original, and the app this one is modelled on. A new version at quill.p3k.app is replacing quill.p3k.io, with Markdown articles, photo uploads, events, reviews, travel, food and weight posts, and bookmarklets for likes and reposts.</p>
+        <p class="src"><a href="https://quill.p3k.app/">New site</a><a href="https://github.com/aaronpk/Quill">Source</a><a href="https://indieweb.org/Quill">Wiki</a></p>
+      </article>
+      <article class="client">
+        <header><h3><a href="https://micropublish.net">Micropublish</a></h3><span class="status live">Active</span></header>
+        <p class="meta">Barry Frost · any browser</p>
+        <p>Strong on editing: create, update, delete and undelete, with templates for notes, articles, replies, RSVPs and more, and post status. No file uploads.</p>
+        <p class="src"><a href="https://github.com/barryf/micropublish">Source</a></p>
+      </article>
+      <article class="client">
+        <header><h3><a href="https://sparkles.sploot.com/">Sparkles</a></h3><span class="status live">Active</span></header>
+        <p class="meta">benji · any browser, installable</p>
+        <p>A cheerful, retro-styled client that installs as a web app and shows up in the share sheet. Notes, articles, photos and RSVPs, plus experimental watch, read, listen and play posts with movie and game lookup.</p>
+        <p class="src"><a href="https://github.com/benjifs/sparkles">Source</a><a href="https://indieweb.org/Sparkles">Wiki</a></p>
+      </article>
+      <article class="client">
+        <header><h3><a href="https://editor.tanna.dev">editor.tanna.dev</a> and <a href="https://grumble.isgeek.net/">Grumble</a></h3><span class="status live">Active</span></header>
+        <p class="meta">Jamie Tanna; jjdelc · any browser</p>
+        <p>editor.tanna.dev shapes itself to the post types your server says it supports. Grumble works offline as a web app, with media and syndication, but needs CORS on your endpoints.</p>
+        <p class="src"><a href="https://indieweb.org/Micropub/Clients">Client list</a><a href="https://github.com/jjdelc/grumble">Grumble source</a></p>
+      </article>
+      <article class="client">
+        <header><h3><a href="https://monocle.p3k.io">Monocle</a></h3><span class="status live">Active</span></header>
+        <p class="meta">Aaron Parecki · any browser</p>
+        <p>A reader rather than a writer. It reads from your Microsub server and posts likes and reposts back to your site with Micropub.</p>
+        <p class="src"><a href="https://github.com/aaronpk/Monocle">Source</a><a href="https://indieweb.org/Monocle">Wiki</a></p>
+      </article>
+    </div>
+
+    <h3 class="group-title" id="extensions">In the browser toolbar</h3>
+    <div class="clients">
+      <article class="client">
+        <header><h3><a href="https://rmdes.github.io/plume/">Plume</a></h3><span class="status new">New</span></header>
+        <p class="meta">rmdes · Chrome, Firefox</p>
+        <p>Released in 2026. A toolbar composer and right-click capture for notes, articles, bookmarks, replies, likes, reposts, quotes and photos. Several accounts, autosaved drafts and syndication targets.</p>
+        <p class="src"><a href="https://github.com/rmdes/plume">Source</a><a href="https://rmendes.net/articles/2026/05/20/building-plume">Building Plume</a></p>
+      </article>
+      <article class="client">
+        <header><h3><a href="https://omnibear.com/">Omnibear</a></h3><span class="status live">Active</span></header>
+        <p class="meta">Keith J. Grant, Anthony Ciccarello · Firefox, Edge</p>
+        <p>The long-standing extension for quick notes, replies, likes and reposts from the page you’re on. Being updated for current extension APIs since late 2024; Chrome support is to come.</p>
+        <p class="src"><a href="https://github.com/omnibear/omnibear">Source</a><a href="https://indieweb.org/Omnibear">Wiki</a></p>
+      </article>
+    </div>
+    <h3 class="group-title" id="servers">Built into your server</h3>
+    <div class="clients">
+      <article class="client">
+        <header><h3><a href="https://getindiekit.com/">Indiekit</a></h3><span class="status live">Active</span></header>
+        <p class="meta">Paul Robert Lloyd · Node.js server, any browser</p>
+        <p>Mainly a Micropub server that saves posts to GitHub, GitLab, Gitea, S3 or files for Eleventy, Hugo and Jekyll sites. Its posts plug-in adds a web editor: Markdown with image upload, alt text, drafts, location, scheduled dates, and edit, delete and restore. Syndicates to Bluesky, Mastodon and the Internet Archive. Version 1.0.0-beta.31, October 2026.</p>
+        <p class="src"><a href="https://indieweb.org/Indiekit">Wiki</a><a href="https://www.npmjs.com/package/@indiekit/endpoint-posts">Posts plug-in</a><a href="https://getindiekit.com/clients">Its client list</a></p>
+      </article>
+      <article class="client">
+        <header><h3><a href="https://github.com/idno/idno">Known</a></h3><span class="status live">Active</span></header>
+        <p class="meta">Ben Werdmuller, Marcus Povey and others · PHP server, any browser</p>
+        <p>The IndieWeb publishing platform, now developed as Idno. Its editor writes posts, notes, photos, events and check-ins directly, with replies, likes and RSVPs by Webmention and syndication through plug-ins. It accepts Micropub from apps like Quill through its IndiePub plug-in, but its own editor doesn’t post by Micropub, so it isn’t in the table. It now federates over ActivityPub too. Version 1.6.4 came out in March 2026, and development is ongoing.</p>
+        <p class="src"><a href="https://indieweb.org/Known">Wiki</a><a href="https://github.com/idno/known/releases">Releases</a><a href="https://github.com/idno/indiepub">IndiePub</a></p>
+      </article>
+      <article class="client">
+        <header><h3><a href="https://github.com/unrelentingtech/micro-panel">micro-panel</a></h3><span class="status live">Active</span></header>
+        <p class="meta">Val Packett · any browser</p>
+        <p>A client-side admin panel you add to your own site, for creating and editing posts over Micropub right on the page.</p>
+        <p class="src"><a href="https://github.com/unrelentingtech/micro-panel">Source</a></p>
+      </article>
+    </div>
+
+    <h3 class="group-title" id="tools">Writing apps, plug-ins and tools</h3>
+    <div class="clients">
+      <article class="client">
+        <header><h3><a href="https://community.obsidian.md/plugins/in-the-open">In the Open</a></h3><span class="status new">New</span></header>
+        <p class="meta">Jorrit van der Heide · Obsidian plug-in, desktop</p>
+        <p>Publishes Obsidian notes as drafts or live posts, updates them in place, withdraws and restores them, uploads images with alt text, and turns citations into a reference list.</p>
+        <p class="src"><a href="https://community.obsidian.md/plugins/in-the-open">Plug-in page</a></p>
+      </article>
+      <article class="client">
+        <header><h3><a href="https://git.inhji.de/inhji/obsidian-micropub">Obsidian Micropub</a></h3><span class="status live">Active</span></header>
+        <p class="meta">inhji · Obsidian plug-in</p>
+        <p>A simpler Obsidian plug-in that publishes a note once. Updating a published post isn’t supported.</p>
+        <p class="src"><a href="https://git.inhji.de/inhji/obsidian-micropub">Source</a></p>
+      </article>
+      <article class="client">
+        <header><h3><a href="https://code.rmendes.net/rick/micropub-mcp">micropub-mcp</a></h3><span class="status new">New</span></header>
+        <p class="meta">rmdes · AI assistants</p>
+        <p>An MCP server, from March 2026, that lets assistants like Claude create, update, delete and undelete posts, upload media and syndicate, signing in with IndieAuth.</p>
+        <p class="src"><a href="https://code.rmendes.net/rick/micropub-mcp">Source</a></p>
+      </article>
+      <article class="client">
+        <header><h3>Command line</h3><span class="status live">Active</span></header>
+        <p class="meta">Various · terminal</p>
+        <p><a href="https://gitlab.com/jamietanna/micropub-go/">micropub-go</a> by Jamie Tanna and <a href="https://indieweb.org/shpub">shpub</a> post from the terminal, handy for scripts.</p>
+        <p class="src"><a href="https://indieweb.org/Micropub/Clients">Client list</a></p>
+      </article>
+    </div>
+  </section>
+
+  <section class="doc-section" id="more">
+    <p class="eyebrow">Even more</p>
+    <h2>The long tail</h2>
+    <p>The IndieWeb wiki lists dozens more: single-purpose tools like <a href="https://indieweb.org/ownyourswarm">OwnYourSwarm</a> for check-ins, <a href="https://indieweb.org/Teacup">Teacup</a> for food, <a href="https://indieweb.org/indiebookclub">indiebookclub</a> for books, <a href="https://github.com/martymcguire/screech">Screech</a> for audio, <a href="https://github.com/martymcguire/slater">Slater</a> for events and <a href="https://indieweb.org/PhotoPostr">PhotoPostr</a> for photo galleries, plus chat bots and personal editors built for one site. See the <a href="https://indieweb.org/Micropub/Clients">full list</a>, or <a href="../indieweb/">how Micropub fits the IndieWeb</a>.</p>
+  </section>
+
+  <div style="height:104px"></div>
+</main>
+
+<footer>
+  <div class="wrap">
+    <p>Quill for iOS is a native take on <a href="https://quill.p3k.io/">Quill</a>, the web Micropub client by Aaron Parecki. Apache License 2.0.</p>
+    <nav><a href="../">Home</a><a href="https://github.com/caseyg/quill-native">Source</a><a href="https://github.com/caseyg/quill-native/issues">Issues</a></nav>
+  </div>
+</footer>
+<script>
+  const nav = document.getElementById('nav');
+  addEventListener('scroll', () => nav.classList.toggle('scrolled', scrollY > 8), { passive: true });
+</script>
+</body>
+</html>
