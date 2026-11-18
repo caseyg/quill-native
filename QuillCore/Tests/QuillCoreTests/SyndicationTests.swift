@@ -9,7 +9,8 @@ final class SyndicationTests: XCTestCase {
 
     func testReadsSyndicationLinksAndNamesTheirServices() throws {
         let p = try post(#""syndication":["https://bsky.app/profile/me.example/post/3k","https://hachyderm.io/@me/1131","https://mastodon.example/users/me/statuses/9","https://www.flickr.com/photos/me/1","https://notes.example/x"]"#)
-        XCTAssertEqual(p.syndicatedCopies.map(\.service), ["Bluesky", "Mastodon", "Mastodon", "Flickr", "notes.example"])
+        XCTAssertEqual(p.syndicatedCopies.map(\.service), ["Bluesky", "Mastodon", "Flickr", "notes.example"])
+        XCTAssertEqual(p.syndicatedCopies[1].url.absoluteString, "https://hachyderm.io/@me/1131")
     }
 
     func testPostsWithoutSyndicationHaveNoCopies() throws {

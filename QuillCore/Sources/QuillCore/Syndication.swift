@@ -29,10 +29,10 @@ public struct SyndicatedCopy: Equatable, Identifiable, Sendable {
 }
 
 public extension Post {
-    /// Copies on other sites, one per link.
+    /// Copies on other sites, one per service. A thread lists every post, first post first, so the first stands for it.
     var syndicatedCopies: [SyndicatedCopy] {
-        var seen = Set<URL>()
-        return (syndication ?? []).filter { seen.insert($0).inserted && $0 != url }.map(SyndicatedCopy.init)
+        var seen = Set<String>()
+        return (syndication ?? []).filter { $0 != url }.map(SyndicatedCopy.init).filter { seen.insert($0.service).inserted }
     }
 
     /// The server's syndication targets this post has no copy on yet, judged by host or service name.
@@ -54,12 +54,14 @@ public extension Payload {
     /// The targets go at the top level, beside `action`, as servers read commands there rather than in `add`.
     /// `texts` holds the text written for each target, keyed by uid, as `mp-syndicate-text`. Servers that
     /// don't know it write their own text.
-    static func syndicate(_ url: URL, to targets: [String], texts: [String: String] = [:], preferences: Preferences = Preferences()) throws -> JSONValue {
+    /// `clearing` names a stored thread property to delete, so the server sends one post instead.
+    static func syndicate(_ url: URL, to targets: [String], texts: [String: String] = [:], clearing: String? = nil, preferences: Preferences = Preferences()) throws -> JSONValue {
         guard !targets.isEmpty else { throw QuillError("Choose where to syndicate.") }
         var body: [String: JSONValue] = ["action": .string("update"), "url": .string(url.absoluteString),
                                          preferences.syndicationField: .array(targets.map(JSONValue.string))]
         let written = texts.filter { targets.contains($0.key) && !$0.value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
         if !written.isEmpty { body["mp-syndicate-text"] = .object(written.mapValues(JSONValue.string)) }
+        if let clearing { body["delete"] = .array([.string(clearing)]) }
         return .object(body)
     }
 }

@@ -20,6 +20,8 @@ public struct Post: Codable, Identifiable, Equatable, Sendable {
     /// Copies of the post on other sites, such as Bluesky or Mastodon, from its `syndication` property.
     /// Optional so libraries saved before it was kept still load.
     public var syndication: [URL]?
+    /// The social copy as a thread, from `syndication-thread`, for servers that store one.
+    public var thread: [String]?
     public var id: String { url.absoluteString }
 
     /// True until the responded-to page has been read. A page with nothing to show leaves empty strings.
@@ -76,6 +78,8 @@ public extension Post {
         let copies = (p["syndication"]?.array ?? []).compactMap { $0.string ?? $0.object?["value"]?.string ?? $0.object?["properties"]?.object?["url"]?.array?.first?.string }
             .compactMap { try? WebURL.parse($0) }
         syndication = copies.isEmpty ? nil : copies
+        let posts = (p["syndication-thread"]?.array ?? []).compactMap(\.string).filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        thread = posts.count > 1 ? posts : nil
     }
 }
 

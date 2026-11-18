@@ -251,11 +251,17 @@ final class AppStore {
     }
 
     /// Asks the site to syndicate a published post, with the text written for each target, then reads the post again for its new links.
-    func syndicate(_ post: Post, to targets: [SyndicationTarget], texts: [String: String] = [:]) async -> Bool {
+    func syndicate(_ post: Post, to targets: [SyndicationTarget], texts: [String: String] = [:], thread: [String]? = nil) async -> Bool {
         guard let client else { return false }
         guard account?.permits("update") == true else { self.error = "Your site didn’t grant permission to update posts. Sign in again."; return false }
         do {
-            try await client.syndicate(post.url, to: targets.map(\.uid), texts: texts, preferences: preferences)
+            if let thread, thread.count > 1, let support = config.thread {
+                try await client.syndicate(post.url, to: targets.map(\.uid), thread: thread, support: support, preferences: preferences)
+            } else {
+                // A thread saved earlier would be sent instead of the single post.
+                let clearing = post.thread == nil ? nil : config.thread?.property
+                try await client.syndicate(post.url, to: targets.map(\.uid), texts: texts, clearing: clearing, preferences: preferences)
+            }
             syndicated += 1
         } catch { self.error = error.localizedDescription; return false }
         // Some servers syndicate in the background, so the link may appear only on a later sync.

@@ -1,6 +1,17 @@
 # Plan: threads for Bluesky and Mastodon
 
-Status: planned, not built. Needs a matching change on the Micropub server.
+Status: **built** (#15), following caseyagollan.com's [syndication threads proposal](https://github.com/caseyg/caseyagollan.com/blob/claude/project-thread-yv6hhs/docs/indieweb-publishing/proposals/micropub-syndication-threads.md), which replaces the protocol sketched below.
+
+## What shipped
+
+- Quill shows the thread editor only when `q=config` has a `syndication-thread` object. It reads `max-posts` and the per-network `limits` from it.
+- In the Syndicate sheet, **Thread** splits the whole post into posts that fit every chosen network. It splits at paragraphs, then sentences, then words, and the link back ends the last post. Each post has its own editor, count and @mention suggestions. From each post's menu you can join it with the one before, insert a post after it, or delete it. **Split Again** re-splits the thread.
+- A thread is shared by every network, as the proposal defines it. **Edit Separately** applies only to single posts.
+- **Post** sends `{"action":"update","url":…,"mp-syndicate-to":[…],"replace":{"syndication-thread":[…]}}`, so the server saves the thread and sends it.
+- A thread already saved on the post (`syndication-thread` from `q=source`) opens as a thread. Choosing **Single Post** deletes it in the same request, so the server sends one post.
+- `syndication` now lists every post of a thread, so "Open on …" shows only the first link for each network.
+
+Not yet: `syndication-photo-post` (placing photos on later posts), threads from the composer at creation time, and editing the thread of a post that's already been sent. The rest of this document is the original sketch, kept for context.
 
 ## Goal
 

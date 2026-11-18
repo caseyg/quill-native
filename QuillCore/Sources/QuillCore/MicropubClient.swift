@@ -16,6 +16,8 @@ public struct ServerConfig: Decodable, Sendable {
     public var channels: [String] = []
     public var visibility: [String] = []
     public var postTypes: [String] = []
+    /// Set when the server can send a post's social copy as a thread.
+    public var thread: ThreadSupport?
     public init() {}
     public init(from decoder: Decoder) throws {
         let value = try JSONValue(from: decoder).object ?? [:]
@@ -29,6 +31,7 @@ public struct ServerConfig: Decodable, Sendable {
         channels = (value["channels"]?.array ?? []).compactMap { $0.string ?? $0.object?["uid"]?.string }
         visibility = (value["visibility"]?.array ?? []).compactMap(\.string)
         postTypes = (value["post-types"]?.array ?? []).compactMap { $0.object?["type"]?.string }
+        thread = ThreadSupport(value["syndication-thread"])
     }
 }
 
@@ -108,7 +111,7 @@ public struct MicropubClient {
     public func configuration() async throws -> ServerConfig {
         let data = try await query("config")
         var config = try JSONDecoder().decode(ServerConfig.self, from: data)
-        if config.targets.isEmpty, let data = try? await query("syndicate-to"), let more = try? JSONDecoder().decode(ServerConfig.self, from: data) { config.targets = more.targets }
+        if config.targets.isEmpty, let data = try? await query("syndicate-to"), let more = try? JSONDecoder().decode(ServerConfig.self, from: data) { config.targets = more.targets; config.thread = config.thread ?? more.thread }
         if config.channels.isEmpty, let data = try? await query("channels"), let more = try? JSONDecoder().decode(ServerConfig.self, from: data) { config.channels = more.channels }
         return config
     }
@@ -184,9 +187,16 @@ public struct MicropubClient {
         return try Draft(source: JSONDecoder().decode(JSONValue.self, from: data), url: url)
     }
     /// Asks the server to copy a published post to more syndication targets, with a Micropub update that adds them.
-    public func syndicate(_ url: URL, to targets: [String], texts: [String: String] = [:], preferences: Preferences = Preferences()) async throws {
+    public func syndicate(_ url: URL, to targets: [String], texts: [String: String] = [:], clearing: String? = nil, preferences: Preferences = Preferences()) async throws {
         var req = request(endpoint, method: "POST")
-        req.httpBody = try Payload.syndicate(url, to: targets, texts: texts, preferences: preferences).encoded()
+        req.httpBody = try Payload.syndicate(url, to: targets, texts: texts, clearing: clearing, preferences: preferences).encoded()
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        let (_, response) = try await transport(req); try Network.check(response)
+    }
+    /// Saves a thread on a published post and asks the server to send it to the targets.
+    public func syndicate(_ url: URL, to targets: [String], thread: [String], support: ThreadSupport, preferences: Preferences = Preferences()) async throws {
+        var req = request(endpoint, method: "POST")
+        req.httpBody = try Payload.syndicate(url, to: targets, thread: thread, support: support, preferences: preferences).encoded()
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         let (_, response) = try await transport(req); try Network.check(response)
     }

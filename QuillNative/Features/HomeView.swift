@@ -276,7 +276,8 @@ private struct PhotoView: View {
     }
 }
 
-/// Sends a published post to more networks, with one text for all of them or one for each.
+/// Sends a published post to more networks, with one text for all of them or one for each,
+/// or as a thread when the site can send one.
 private struct SyndicateSheet: View {
     @Environment(AppStore.self) private var store
     @Environment(\.dismiss) private var dismiss
@@ -285,21 +286,36 @@ private struct SyndicateSheet: View {
     /// One text for every network while linked.
     @State private var linked = true
     @State private var texts: [String: String] = [:]
+    /// The posts of a thread, shared by every network. Empty when sending one post.
+    @State private var parts: [String] = []
     @State private var sending = false
 
-    private var targets: [SyndicationTarget] { store.syndicationTargets(for: post) }
-    private var picked: [SyndicationTarget] { targets.filter { chosen.contains($0.uid) } }
-    /// Chosen targets on networks Quill can write for. Others use the server's own text.
     private struct Destination: Identifiable {
         var target: SyndicationTarget
         var service: SocialService
         var id: String { target.uid }
     }
+    private var targets: [SyndicationTarget] { store.syndicationTargets(for: post) }
+    private var picked: [SyndicationTarget] { targets.filter { chosen.contains($0.uid) } }
+    /// Chosen targets on networks Quill can write for. Others use the server's own text.
     private var social: [Destination] { picked.compactMap { t in SocialService(t).map { Destination(target: t, service: $0) } } }
-    private var shared: Bool { linked && social.count > 1 }
+    private var shared: Bool { (linked || threaded) && social.count > 1 }
     private var editors: [Destination] { shared ? Array(social.prefix(1)) : social }
-    private var over: Bool { social.contains { SocialText.count(texts[$0.target.uid] ?? "", for: $0.service) > $0.service.limit } }
-    private var empty: Bool { social.contains { (texts[$0.target.uid] ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty } }
+    private var support: ThreadSupport? { store.config.thread }
+    private var threaded: Bool { !parts.isEmpty }
+
+    private func limit(_ service: SocialService) -> Int { support?.limit(for: service) ?? service.limit }
+    private func fitsAll(_ text: String) -> Bool { social.allSatisfy { SocialText.count(text, for: $0.service) <= limit($0.service) } }
+
+    private var invalid: Bool {
+        if threaded {
+            return parts.count > (support?.maxPosts ?? 1) || parts.contains { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !fitsAll($0) }
+        }
+        return social.contains { d in
+            let text = texts[d.target.uid] ?? ""
+            return text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || SocialText.count(text, for: d.service) > limit(d.service)
+        }
+    }
 
     var body: some View {
         NavigationStack {
@@ -307,18 +323,7 @@ private struct SyndicateSheet: View {
                 VStack(alignment: .leading, spacing: 20) {
                     Text(post.displayTitle).font(.headline).lineLimit(2)
                     chips
-                    ForEach(editors) { editor in
-                        VStack(alignment: .leading, spacing: 6) {
-                            HStack {
-                                Text(shared ? social.map { $0.target.name }.joined(separator: " & ") : editor.target.name)
-                                Spacer()
-                                counts(for: shared ? social : [editor])
-                            }
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                            MentionEditor(text: binding(editor.target.uid), service: editor.service, follows: store.follows.accounts)
-                        }
-                    }
+                    if threaded, let first = social.first { thread(first.service) } else { singles }
                 }
                 .padding()
             }
@@ -328,10 +333,15 @@ private struct SyndicateSheet: View {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel", role: .cancel) { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Post") { send() }
-                        .disabled(sending || picked.isEmpty || over || empty)
+                        .disabled(sending || picked.isEmpty || invalid)
                 }
-                if social.count > 1 {
-                    ToolbarItem(placement: .bottomBar) {
+                ToolbarItemGroup(placement: .bottomBar) {
+                    if support != nil && !social.isEmpty {
+                        Button(threaded ? "Single Post" : "Thread", systemImage: threaded ? "text.alignleft" : "text.line.first.and.arrowtriangle.forward") { toggleThread() }
+                            .labelStyle(.titleAndIcon)
+                    }
+                    Spacer()
+                    if social.count > 1 && !threaded {
                         Button(linked ? "Edit Separately" : "Use One Text", systemImage: linked ? "link" : "link.badge.plus") { toggleLinked() }
                             .labelStyle(.titleAndIcon)
                     }
@@ -339,9 +349,65 @@ private struct SyndicateSheet: View {
             }
             .animation(.snappy, value: chosen)
             .animation(.snappy, value: linked)
+            .animation(.snappy, value: parts.count)
         }
         .onAppear(perform: start)
         .task { await store.refreshFollows(for: SocialService.allCases) }
+    }
+
+    @ViewBuilder private var singles: some View {
+        ForEach(editors) { editor in
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Text(shared ? social.map { $0.target.name }.joined(separator: " & ") : editor.target.name)
+                    Spacer()
+                    counts(texts[editor.target.uid] ?? "", for: shared ? social : [editor])
+                }
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                MentionEditor(text: binding(editor.target.uid), service: editor.service, follows: store.follows.accounts)
+            }
+        }
+    }
+
+    /// Each post of the thread, with its count against the tightest network chosen.
+    private func thread(_ service: SocialService) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            ForEach(parts.indices, id: \.self) { index in
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        Text("\(index + 1) of \(parts.count)")
+                        Spacer()
+                        counts(parts[index], for: social)
+                        Menu {
+                            if index > 0 {
+                                Button("Join with Previous", systemImage: "arrow.up.to.line") { join(index) }
+                            }
+                            Button("Insert Post After", systemImage: "plus") { parts.insert("", at: index + 1) }
+                            if parts.count > 2 {
+                                Button("Delete", systemImage: "trash", role: .destructive) { parts.remove(at: index) }
+                            }
+                        } label: {
+                            Image(systemName: "ellipsis.circle").imageScale(.large)
+                        }
+                        .accessibilityLabel("Post \(index + 1) Actions")
+                    }
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    MentionEditor(text: partBinding(index), service: service, follows: store.follows.accounts)
+                }
+            }
+            HStack {
+                Button("Add Post", systemImage: "plus") { parts.append("") }
+                    .disabled(parts.count >= (support?.maxPosts ?? 1))
+                Spacer()
+                Button("Split Again", systemImage: "arrow.triangle.2.circlepath") { parts = split(parts.joined(separator: "\n\n"), linking: false) }
+            }
+            .font(.subheadline)
+            if parts.count > (support?.maxPosts ?? 1) {
+                Text("A thread can have \(support?.maxPosts ?? 1) posts.").font(.footnote).foregroundStyle(.red)
+            }
+        }
     }
 
     private var chips: some View {
@@ -371,16 +437,15 @@ private struct SyndicateSheet: View {
     }
 
     /// A shared text shows the count of the network it is closest to outgrowing.
-    private func counts(for list: [Destination]) -> some View {
+    private func counts(_ text: String, for list: [Destination]) -> some View {
         let tightest = list.max { a, b in
-            Double(SocialText.count(texts[a.target.uid] ?? "", for: a.service)) / Double(a.service.limit)
-                < Double(SocialText.count(texts[b.target.uid] ?? "", for: b.service)) / Double(b.service.limit)
+            Double(SocialText.count(text, for: a.service)) / Double(limit(a.service)) < Double(SocialText.count(text, for: b.service)) / Double(limit(b.service))
         }
-        let count = tightest.map { SocialText.count(texts[$0.target.uid] ?? "", for: $0.service) } ?? 0
-        let limit = tightest?.service.limit ?? 0
-        return Text("\(count)/\(limit)")
+        let count = tightest.map { SocialText.count(text, for: $0.service) } ?? 0
+        let most = tightest.map { limit($0.service) } ?? 0
+        return Text("\(count)/\(most)")
             .monospacedDigit()
-            .foregroundStyle(count > limit ? Color.red : Color.secondary)
+            .foregroundStyle(count > most ? Color.red : Color.secondary)
             .contentTransition(.numericText())
     }
 
@@ -391,13 +456,21 @@ private struct SyndicateSheet: View {
         })
     }
 
-    /// Every target starts chosen, with the shorter network's text shared by all.
+    private func partBinding(_ index: Int) -> Binding<String> {
+        Binding(get: { parts.indices.contains(index) ? parts[index] : "" }, set: { if parts.indices.contains(index) { parts[index] = $0 } })
+    }
+
+    private var defaultService: SocialService {
+        targets.compactMap { SocialService($0) }.min { limit($0) < limit($1) } ?? .bluesky
+    }
+
+    /// Every target starts chosen. A thread saved on the post opens as a thread; otherwise the shorter network's text is shared by all.
     private func start() {
         guard chosen.isEmpty else { return }
         chosen = Set(targets.map(\.uid))
-        let first = targets.compactMap { SocialService($0) }.min { $0.limit < $1.limit } ?? .bluesky
-        let text = SocialText.defaultText(title: post.name, text: post.text, url: post.url, service: first)
+        let text = SocialText.defaultText(title: post.name, text: post.text, url: post.url, service: defaultService)
         for target in targets where SocialService(target) != nil { texts[target.uid] = text }
+        if support != nil, let saved = post.thread, saved.count > 1 { parts = saved }
     }
 
     private func fill(_ target: SyndicationTarget) {
@@ -411,11 +484,43 @@ private struct SyndicateSheet: View {
         if linked, let first = social.first { for item in social { texts[item.target.uid] = texts[first.target.uid] } }
     }
 
+    /// Splits text into posts that fit every chosen network. The link back ends the thread.
+    private func split(_ text: String, linking: Bool) -> [String] {
+        var posts = ThreadSplitter.split(text, link: linking ? post.url.absoluteString : nil, fits: fitsAll)
+        while posts.count < 2 { posts.append("") }
+        return posts
+    }
+
+    private func toggleThread() {
+        if threaded {
+            let text = parts.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }.joined(separator: "\n\n")
+            for item in social { texts[item.target.uid] = text }
+            parts = []
+            return
+        }
+        guard let first = social.first else { return }
+        let current = texts[first.target.uid] ?? ""
+        // The suggested text was shortened to fit one post, so a thread starts from the whole post instead.
+        let suggested = SocialText.defaultText(title: post.name, text: post.text, url: post.url, service: first.service)
+        let source = [post.name, post.text].map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }.joined(separator: "\n\n")
+        parts = current == suggested || current.isEmpty ? split(source, linking: true) : split(current, linking: false)
+        linked = true
+    }
+
+    private func join(_ index: Int) {
+        guard index > 0, parts.indices.contains(index) else { return }
+        let joined = [parts[index - 1], parts[index]].map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }.joined(separator: "\n\n")
+        parts[index - 1] = joined
+        parts.remove(at: index)
+        if parts.count < 2 { parts.append("") }
+    }
+
     private func send() {
         sending = true
         let written = Dictionary(uniqueKeysWithValues: social.map { ($0.target.uid, texts[$0.target.uid] ?? "") })
+        let thread = threaded ? parts.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) } : nil
         Task {
-            if await store.syndicate(post, to: picked, texts: written) { dismiss() }
+            if await store.syndicate(post, to: picked, texts: written, thread: thread) { dismiss() }
             sending = false
         }
     }
