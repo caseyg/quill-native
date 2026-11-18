@@ -16,6 +16,8 @@ final class GitHubBackup {
     private(set) var synced: Date? = SharedStorage.defaults.object(forKey: "githubSynced") as? Date
     /// The last failure, shown in Settings. Drafts stay on the device and are tried again on the next save.
     private(set) var problem: String?
+    /// What has been written to the repository, so drafts can link to their files.
+    private(set) var mirror: DraftMirror? = SharedStorage.read(DraftMirror.self, key: "githubMirror")
     @ObservationIgnored private var pending: Task<Void, Never>?
     @ObservationIgnored private var again = false
 
@@ -61,7 +63,14 @@ final class GitHubBackup {
         SharedStorage.defaults.removeObject(forKey: "github")
         SharedStorage.defaults.removeObject(forKey: "githubMirror")
         SharedStorage.defaults.removeObject(forKey: "githubSynced")
-        connection = nil; synced = nil; problem = nil
+        connection = nil; synced = nil; problem = nil; mirror = nil
+    }
+
+    /// The draft's Markdown file on github.com, once it has been copied to the chosen repository.
+    func webURL(for draft: Draft) -> URL? {
+        guard let repository = connection?.repository, let mirror, mirror.repository == repository.fullName,
+              let path = mirror.markdownPath(for: draft.id) else { return nil }
+        return repository.webURL(for: path)
     }
 
     // MARK: Repository
@@ -167,5 +176,8 @@ final class GitHubBackup {
         guard let connection, connection.repository?.fullName == mirror.repository, DraftMirror.normalize(connection.folder) == mirror.folder else { throw CancellationError() }
     }
 
-    private func store(_ mirror: DraftMirror) { try? SharedStorage.write(mirror, key: "githubMirror") }
+    private func store(_ mirror: DraftMirror) {
+        self.mirror = mirror
+        try? SharedStorage.write(mirror, key: "githubMirror")
+    }
 }

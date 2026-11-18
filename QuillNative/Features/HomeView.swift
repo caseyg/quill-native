@@ -9,6 +9,7 @@ struct HomeView: View {
     @State private var askingForURL = false
     @State private var editURL = ""
     @State private var deleting: Post?
+    @State private var syndicating: Post?
 
     private var drafts: [Draft] {
         store.drafts.filter { search.isEmpty || $0.displayTitle.localizedCaseInsensitiveContains(search) }
@@ -31,6 +32,10 @@ struct HomeView: View {
                             Button(role: .destructive) { store.remove(draft) } label: { Label("Delete", systemImage: "trash") }
                         }
                         .contextMenu {
+                            if let url = store.github.webURL(for: draft) {
+                                Button { openURL(url) } label: { Label("Open on GitHub", systemImage: "arrow.up.right.square") }
+                                Divider()
+                            }
                             Button(role: .destructive) { store.remove(draft) } label: { Label("Delete", systemImage: "trash") }
                         }
                     }
@@ -56,6 +61,12 @@ struct HomeView: View {
                                 Button { Task { await store.edit(post) } } label: { Label("Edit", systemImage: "pencil") }
                             }
                             Button { openURL(post.url) } label: { Label("See on Web", systemImage: "globe") }
+                            ForEach(post.syndicatedCopies) { copy in
+                                Button { openURL(copy.url) } label: { Label("Open on \(copy.service)", systemImage: "arrow.up.right.square") }
+                            }
+                            if !store.syndicationTargets(for: post).isEmpty {
+                                Button { syndicating = post } label: { Label("Syndicate…", systemImage: "paperplane") }
+                            }
                             ShareLink(item: post.url) { Label("Share", systemImage: "square.and.arrow.up") }
                             Button { UIPasteboard.general.url = post.url } label: { Label("Copy Link", systemImage: "link") }
                             Divider()
@@ -109,6 +120,8 @@ struct HomeView: View {
             Text(post.displayTitle)
         }
         .sensoryFeedback(.success, trigger: store.receipts.count) { old, new in new > old }
+        .sensoryFeedback(.success, trigger: store.syndicated)
+        .sheet(item: $syndicating) { post in SyndicateSheet(post: post) }
     }
 
     /// Editable posts open in the composer. Others open on the site.
@@ -260,5 +273,345 @@ private struct PhotoView: View {
             guard case .local(let data) = photo else { return }
             image = await Task.detached { UIImage(data: data)?.preparingThumbnail(of: CGSize(width: 144, height: 144)) }.value
         }
+    }
+}
+
+/// Sends a published post to more networks, with one text for all of them or one for each,
+/// or as a thread when the site can send one.
+private struct SyndicateSheet: View {
+    @Environment(AppStore.self) private var store
+    @Environment(\.dismiss) private var dismiss
+    let post: Post
+    @State private var chosen: Set<String> = []
+    /// One text for every network while linked.
+    @State private var linked = true
+    @State private var texts: [String: String] = [:]
+    /// The posts of a thread, shared by every network. Empty when sending one post.
+    @State private var parts: [String] = []
+    @State private var sending = false
+
+    private struct Destination: Identifiable {
+        var target: SyndicationTarget
+        var service: SocialService
+        var id: String { target.uid }
+    }
+    private var targets: [SyndicationTarget] { store.syndicationTargets(for: post) }
+    private var picked: [SyndicationTarget] { targets.filter { chosen.contains($0.uid) } }
+    /// Chosen targets on networks Quill can write for. Others use the server's own text.
+    private var social: [Destination] { picked.compactMap { t in SocialService(t).map { Destination(target: t, service: $0) } } }
+    private var shared: Bool { (linked || threaded) && social.count > 1 }
+    private var editors: [Destination] { shared ? Array(social.prefix(1)) : social }
+    private var support: ThreadSupport? { store.config.thread }
+    private var threaded: Bool { !parts.isEmpty }
+
+    private func limit(_ service: SocialService) -> Int { support?.limit(for: service) ?? service.limit }
+    private func fitsAll(_ text: String) -> Bool { social.allSatisfy { SocialText.count(text, for: $0.service) <= limit($0.service) } }
+
+    private var invalid: Bool {
+        if threaded {
+            return parts.count > (support?.maxPosts ?? 1) || parts.contains { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !fitsAll($0) }
+        }
+        return social.contains { d in
+            let text = texts[d.target.uid] ?? ""
+            return text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || SocialText.count(text, for: d.service) > limit(d.service)
+        }
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    Text(post.displayTitle).font(.headline).lineLimit(2)
+                    chips
+                    if threaded, let first = social.first { thread(first.service) } else { singles }
+                }
+                .padding()
+            }
+            .navigationTitle("Syndicate")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel", role: .cancel) { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Post") { send() }
+                        .disabled(sending || picked.isEmpty || invalid)
+                }
+                ToolbarItemGroup(placement: .bottomBar) {
+                    if support != nil && !social.isEmpty {
+                        Button(threaded ? "Single Post" : "Thread", systemImage: threaded ? "text.alignleft" : "text.line.first.and.arrowtriangle.forward") { toggleThread() }
+                            .labelStyle(.titleAndIcon)
+                    }
+                    Spacer()
+                    if social.count > 1 && !threaded {
+                        Button(linked ? "Edit Separately" : "Use One Text", systemImage: linked ? "link" : "link.badge.plus") { toggleLinked() }
+                            .labelStyle(.titleAndIcon)
+                    }
+                }
+            }
+            .animation(.snappy, value: chosen)
+            .animation(.snappy, value: linked)
+            .animation(.snappy, value: parts.count)
+        }
+        .onAppear(perform: start)
+        .task { await store.refreshFollows(for: SocialService.allCases) }
+    }
+
+    @ViewBuilder private var singles: some View {
+        ForEach(editors) { editor in
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Text(shared ? social.map { $0.target.name }.joined(separator: " & ") : editor.target.name)
+                    Spacer()
+                    counts(texts[editor.target.uid] ?? "", for: shared ? social : [editor])
+                }
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                MentionEditor(text: binding(editor.target.uid), service: editor.service, follows: store.follows.accounts)
+            }
+        }
+    }
+
+    /// Each post of the thread, with its count against the tightest network chosen.
+    private func thread(_ service: SocialService) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            ForEach(parts.indices, id: \.self) { index in
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        Text("\(index + 1) of \(parts.count)")
+                        Spacer()
+                        counts(parts[index], for: social)
+                        Menu {
+                            if index > 0 {
+                                Button("Join with Previous", systemImage: "arrow.up.to.line") { join(index) }
+                            }
+                            Button("Insert Post After", systemImage: "plus") { parts.insert("", at: index + 1) }
+                            if parts.count > 2 {
+                                Button("Delete", systemImage: "trash", role: .destructive) { parts.remove(at: index) }
+                            }
+                        } label: {
+                            Image(systemName: "ellipsis.circle").imageScale(.large)
+                        }
+                        .accessibilityLabel("Post \(index + 1) Actions")
+                    }
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    MentionEditor(text: partBinding(index), service: service, follows: store.follows.accounts)
+                }
+            }
+            HStack {
+                Button("Add Post", systemImage: "plus") { parts.append("") }
+                    .disabled(parts.count >= (support?.maxPosts ?? 1))
+                Spacer()
+                Button("Split Again", systemImage: "arrow.triangle.2.circlepath") { parts = split(parts.joined(separator: "\n\n"), linking: false) }
+            }
+            .font(.subheadline)
+            if parts.count > (support?.maxPosts ?? 1) {
+                Text("A thread can have \(support?.maxPosts ?? 1) posts.").font(.footnote).foregroundStyle(.red)
+            }
+        }
+    }
+
+    private var chips: some View {
+        ScrollView(.horizontal) {
+            HStack(spacing: 8) {
+                ForEach(targets) { target in
+                    let isOn = chosen.contains(target.uid)
+                    Button {
+                        if isOn { chosen.remove(target.uid) } else { chosen.insert(target.uid); fill(target) }
+                    } label: {
+                        Label(target.name, systemImage: isOn ? "checkmark" : "plus")
+                            .font(.subheadline.weight(.medium))
+                            .contentTransition(.symbolEffect(.replace))
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 7)
+                            .foregroundStyle(isOn ? Color(uiColor: .systemBackground) : Color.primary)
+                            .background(isOn ? AnyShapeStyle(.tint) : AnyShapeStyle(.fill.tertiary), in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityAddTraits(isOn ? .isSelected : [])
+                }
+            }
+        }
+        .scrollIndicators(.hidden)
+        .scrollClipDisabled()
+        .sensoryFeedback(.selection, trigger: chosen)
+    }
+
+    /// A shared text shows the count of the network it is closest to outgrowing.
+    private func counts(_ text: String, for list: [Destination]) -> some View {
+        let tightest = list.max { a, b in
+            Double(SocialText.count(text, for: a.service)) / Double(limit(a.service)) < Double(SocialText.count(text, for: b.service)) / Double(limit(b.service))
+        }
+        let count = tightest.map { SocialText.count(text, for: $0.service) } ?? 0
+        let most = tightest.map { limit($0.service) } ?? 0
+        return Text("\(count)/\(most)")
+            .monospacedDigit()
+            .foregroundStyle(count > most ? Color.red : Color.secondary)
+            .contentTransition(.numericText())
+    }
+
+    private func binding(_ uid: String) -> Binding<String> {
+        Binding(get: { texts[uid] ?? "" }, set: { value in
+            texts[uid] = value
+            if shared { for item in social { texts[item.target.uid] = value } }
+        })
+    }
+
+    private func partBinding(_ index: Int) -> Binding<String> {
+        Binding(get: { parts.indices.contains(index) ? parts[index] : "" }, set: { if parts.indices.contains(index) { parts[index] = $0 } })
+    }
+
+    private var defaultService: SocialService {
+        targets.compactMap { SocialService($0) }.min { limit($0) < limit($1) } ?? .bluesky
+    }
+
+    /// Every target starts chosen. A thread saved on the post opens as a thread; otherwise the shorter network's text is shared by all.
+    private func start() {
+        guard chosen.isEmpty else { return }
+        chosen = Set(targets.map(\.uid))
+        let text = SocialText.defaultText(title: post.name, text: post.text, url: post.url, service: defaultService)
+        for target in targets where SocialService(target) != nil { texts[target.uid] = text }
+        if support != nil, let saved = post.thread, saved.count > 1 { parts = saved }
+    }
+
+    private func fill(_ target: SyndicationTarget) {
+        guard let service = SocialService(target) else { return }
+        if linked, let other = social.first(where: { $0.target.uid != target.uid }) { texts[target.uid] = texts[other.target.uid]; return }
+        if (texts[target.uid] ?? "").isEmpty { texts[target.uid] = SocialText.defaultText(title: post.name, text: post.text, url: post.url, service: service) }
+    }
+
+    private func toggleLinked() {
+        linked.toggle()
+        if linked, let first = social.first { for item in social { texts[item.target.uid] = texts[first.target.uid] } }
+    }
+
+    /// Splits text into posts that fit every chosen network. The link back ends the thread.
+    private func split(_ text: String, linking: Bool) -> [String] {
+        var posts = ThreadSplitter.split(text, link: linking ? post.url.absoluteString : nil, fits: fitsAll)
+        while posts.count < 2 { posts.append("") }
+        return posts
+    }
+
+    private func toggleThread() {
+        if threaded {
+            let text = parts.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }.joined(separator: "\n\n")
+            for item in social { texts[item.target.uid] = text }
+            parts = []
+            return
+        }
+        guard let first = social.first else { return }
+        let current = texts[first.target.uid] ?? ""
+        // The suggested text was shortened to fit one post, so a thread starts from the whole post instead.
+        let suggested = SocialText.defaultText(title: post.name, text: post.text, url: post.url, service: first.service)
+        let source = [post.name, post.text].map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }.joined(separator: "\n\n")
+        parts = current == suggested || current.isEmpty ? split(source, linking: true) : split(current, linking: false)
+        linked = true
+    }
+
+    private func join(_ index: Int) {
+        guard index > 0, parts.indices.contains(index) else { return }
+        let joined = [parts[index - 1], parts[index]].map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }.joined(separator: "\n\n")
+        parts[index - 1] = joined
+        parts.remove(at: index)
+        if parts.count < 2 { parts.append("") }
+    }
+
+    private func send() {
+        sending = true
+        let written = Dictionary(uniqueKeysWithValues: social.map { ($0.target.uid, texts[$0.target.uid] ?? "") })
+        let thread = threaded ? parts.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) } : nil
+        Task {
+            if await store.syndicate(post, to: picked, texts: written, thread: thread) { dismiss() }
+            sending = false
+        }
+    }
+}
+
+/// A text editor that suggests followed accounts while an @mention is typed.
+private struct MentionEditor: View {
+    @Binding var text: String
+    let service: SocialService
+    let follows: [FollowedAccount]
+    /// Where the cursor is, as an offset, so it survives edits to the text. The end before iOS 18.
+    @State private var cursor: Int?
+    @State private var request: Int?
+
+    private var mention: (range: Range<String.Index>, query: String)? {
+        let offset = min(cursor ?? text.count, text.count)
+        return SocialText.mentionQuery(text, cursor: text.index(text.startIndex, offsetBy: offset))
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            editor
+                .frame(minHeight: 140)
+                .scrollContentBackground(.hidden)
+                .padding(8)
+                .background(.fill.quaternary, in: .rect(cornerRadius: 12))
+            if let mention {
+                let matches = SocialText.suggestions(mention.query, in: follows, service: service)
+                ScrollView(.horizontal) {
+                    HStack(spacing: 8) {
+                        ForEach(matches, id: \.handle) { account in
+                            Button { insert(account, at: mention.range) } label: {
+                                VStack(alignment: .leading, spacing: 0) {
+                                    Text(account.name).font(.subheadline.weight(.medium)).foregroundStyle(Color.primary)
+                                    Text("@" + account.handle).font(.caption).foregroundStyle(Color.secondary)
+                                }
+                                .lineLimit(1)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                                .background(.fill.tertiary, in: .rect(cornerRadius: 10))
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        if matches.isEmpty && !mention.query.isEmpty {
+                            Text(follows.contains { $0.service == service } ? "No matches. Type the full handle." : "Type the full handle.")
+                                .font(.footnote).foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                .scrollIndicators(.hidden)
+                .scrollClipDisabled()
+                .transition(.opacity)
+            }
+        }
+        .animation(.snappy, value: mention?.query)
+    }
+
+    @ViewBuilder private var editor: some View {
+        if #available(iOS 18.0, *) {
+            SelectingEditor(text: $text, cursor: $cursor, request: $request)
+        } else {
+            TextEditor(text: $text)
+        }
+    }
+
+    private func insert(_ account: FollowedAccount, at range: Range<String.Index>) {
+        let result = SocialText.insert(account, into: text, replacing: range)
+        text = result.text
+        cursor = result.cursor
+        request = result.cursor
+    }
+}
+
+@available(iOS 18.0, *)
+private struct SelectingEditor: View {
+    @Binding var text: String
+    @Binding var cursor: Int?
+    /// A cursor position to move to, after a mention is inserted.
+    @Binding var request: Int?
+    @State private var selection: TextSelection?
+
+    var body: some View {
+        TextEditor(text: $text, selection: $selection)
+            .onChange(of: selection) {
+                guard case .selection(let range)? = selection?.indices, range.upperBound <= text.endIndex else { cursor = nil; return }
+                cursor = text.distance(from: text.startIndex, to: range.upperBound)
+            }
+            .onChange(of: request) {
+                guard let request else { return }
+                selection = TextSelection(insertionPoint: text.index(text.startIndex, offsetBy: min(request, text.count)))
+                self.request = nil
+            }
     }
 }

@@ -244,6 +244,66 @@ final class AppStore {
         } catch { self.error = error.localizedDescription }
     }
 
+    /// Whether a published post can be sent to more of the server's syndication targets.
+    func syndicationTargets(for post: Post) -> [SyndicationTarget] {
+        guard !post.isDraft, account?.permits("update") == true else { return [] }
+        return post.unsyndicated(config.targets)
+    }
+
+    /// Asks the site to syndicate a published post, with the text written for each target, then reads the post again for its new links.
+    func syndicate(_ post: Post, to targets: [SyndicationTarget], texts: [String: String] = [:], thread: [String]? = nil) async -> Bool {
+        guard let client else { return false }
+        guard account?.permits("update") == true else { self.error = "Your site didn’t grant permission to update posts. Sign in again."; return false }
+        do {
+            if let thread, thread.count > 1, let support = config.thread {
+                try await client.syndicate(post.url, to: targets.map(\.uid), thread: thread, support: support, preferences: preferences)
+            } else {
+                // A thread saved earlier would be sent instead of the single post.
+                let clearing = post.thread == nil ? nil : config.thread?.property
+                try await client.syndicate(post.url, to: targets.map(\.uid), texts: texts, clearing: clearing, preferences: preferences)
+            }
+            syndicated += 1
+        } catch { self.error = error.localizedDescription; return false }
+        // Some servers syndicate in the background, so the link may appear only on a later sync.
+        guard var fresh = try? await client.post(post.url), let index = library.posts.firstIndex(where: { $0.id == post.id }) else { return true }
+        let old = library.posts[index]
+        if fresh.needsCite, old.target == fresh.target { fresh.citeAuthor = old.citeAuthor; fresh.citeText = old.citeText }
+        if fresh.photo == nil { fresh.photo = old.photo; fresh.photoAlt = old.photoAlt }
+        if fresh.published == nil { fresh.published = old.published }
+        library.posts[index] = fresh
+        saveLibrary()
+        return true
+    }
+
+    // MARK: Mentions
+
+    /// People the person follows on each network, for @mention suggestions.
+    private(set) var follows = SharedStorage.read(FollowCache.self, key: "socialFollows") ?? FollowCache()
+    @ObservationIgnored private var readingFollows = false
+
+    /// The person's own account on a network: named by the server's syndication target, else found in their posts' syndication links.
+    func socialAccount(_ service: SocialService) -> SocialAccount? {
+        for target in config.targets where SocialService(target) == service {
+            if let user = target.user, let account = SocialAccount(link: user) { return account }
+        }
+        return SocialAccount.inferred(service, from: library.posts)
+    }
+
+    /// Reads follows again for networks not read in the last day. Failures keep what is already cached.
+    func refreshFollows(for services: [SocialService]) async {
+        guard !readingFollows else { return }
+        readingFollows = true; defer { readingFollows = false }
+        for service in services {
+            guard let account = socialAccount(service), !follows.isFresh(account),
+                  let found = try? await SocialFollows.fetch(account), !found.isEmpty else { continue }
+            follows.store(found, for: account)
+            try? SharedStorage.write(follows, key: "socialFollows")
+        }
+    }
+
+    /// Counts syndication requests the site accepted, for haptic feedback.
+    var syndicated = 0
+
     /// Signs out here, and asks the site to revoke the token when it offers a way to.
     func signOut() async {
         guard let account else { return }
