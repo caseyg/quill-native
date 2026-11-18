@@ -81,4 +81,4 @@ Tokens stay in the device Keychain. Drafts and their photos stay in the app’s 
 
 ## Credits
 
-Quill is by Aaron Parecki and contributors, Apache License 2.0. This is a new native implementation of compatible Micropub requests. See [`NOTICE`](../NOTICE) and [`LICENSE`](../LICENSE). Design notes are in [docs/design.md](../docs/design.md).
+Licensed under the [Apache License 2.0](../LICENSE). Modelled on [Quill](https://github.com/aaronpk/Quill), Copyright 2013-2016 Aaron Parecki and contributors, also Apache License 2.0. This is a new native implementation of compatible Micropub requests and contains no code or assets copied from Quill. See [`NOTICE`](../NOTICE). Design notes are in [docs/design.md](../docs/design.md).

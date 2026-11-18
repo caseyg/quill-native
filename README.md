@@ -17,6 +17,10 @@ The website stays in `docs/` because GitHub Pages serves it from `main`, folder 
 - iOS: see [ios/README.md](ios/README.md). In short, open `ios/QuillNative.xcodeproj`.
 - Android: see [android/README.md](android/README.md). In short, open `android/` in Android Studio, or run `./gradlew :app:assembleDebug` there.
 
-## Credits
+## License and credits
 
-Quill is by Aaron Parecki and contributors, Apache License 2.0. These are new native implementations of compatible Micropub requests. See `NOTICE` and `LICENSE`.
+Quill Native is licensed under the [Apache License 2.0](LICENSE). See [`NOTICE`](NOTICE).
+
+It is modelled on [Quill](https://github.com/aaronpk/Quill), Copyright 2013-2016 Aaron Parecki and contributors, also Apache License 2.0. These apps are new native implementations of compatible Micropub requests and contain no code or assets copied from Quill.
+
+If you ever bring in code from Quill, keep its copyright line, add a note at the top of the file saying it was modified and how, and keep the credit in `NOTICE`. Apache 2.0 requires all three.

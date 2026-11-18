@@ -35,3 +35,7 @@ The IndieAuth client ID and the GitHub OAuth client ID default to the same value
 - Dates keep the time zone they were written in, or use the device's. There is no time zone picker.
 - The rich HTML editor is a WebView, so the HTML it saves is the browser's own.
 - Voice recordings are attached as WAV.
+
+## Credits
+
+Licensed under the [Apache License 2.0](../LICENSE). Modelled on [Quill](https://github.com/aaronpk/Quill), Copyright 2013-2016 Aaron Parecki and contributors, also Apache License 2.0. This is a new native implementation and contains no code or assets copied from Quill. See [`NOTICE`](../NOTICE).

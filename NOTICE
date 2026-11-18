@@ -1,8 +1,20 @@
 Quill Native
+Copyright 2026 Casey Gollan and contributors
 
-Inspired by Quill, Copyright 2013–2016 Aaron Parecki and contributors.
-Original project: https://github.com/aaronpk/Quill
-Original project license: Apache License, Version 2.0.
+Licensed under the Apache License, Version 2.0. See LICENSE.
 
-The native SwiftUI interface and Swift implementation are new. Micropub property conventions and feature inventory were researched from the original project at commit 3cabff0c599439864fe82f6d923c11c7a69aa58b.
-The original Quill icon is not included.
+This project is inspired by, and modelled on the features of, Quill:
+
+  Quill
+  Copyright 2013-2016 Aaron Parecki and contributors
+  https://github.com/aaronpk/Quill
+  Licensed under the Apache License, Version 2.0
+
+Quill Native is a new implementation in Swift and Kotlin. It contains no
+source code, images or other files copied from Quill. Its Micropub property
+conventions and feature list were researched from Quill at commit
+3cabff0c599439864fe82f6d923c11c7a69aa58b. The original Quill icon is not
+included.
+
+"Quill" is used here only to credit the original project. The Apache License
+grants no rights to Quill's name or marks.
