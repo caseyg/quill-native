@@ -19,4 +19,4 @@ The website stays in `docs/` because GitHub Pages serves it from `main`, folder 
 
 ## Credits
 
-Quill is by Aaron Parecki and contributors, Apache License 2.0. These are new native implementations of compatible Micropub requests. See `NOTICE` and `LICENSE`.
+Quill is by Aaron Parecki and contributors, Apache License 2.0. These are new native implementations of compatible Micropub requests. See [`NOTICE`](NOTICE) and [`LICENSE`](LICENSE).
